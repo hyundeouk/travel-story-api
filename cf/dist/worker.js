@@ -588,12 +588,12 @@ var require_strnum = __commonJS({
       eNotation: true
       //skipLike: /regex/
     };
-    function toNumber(str8, options = {}) {
+    function toNumber(str9, options = {}) {
       options = Object.assign({}, consider, options);
-      if (!str8 || typeof str8 !== "string") return str8;
-      let trimmedStr = str8.trim();
-      if (options.skipLike !== void 0 && options.skipLike.test(trimmedStr)) return str8;
-      else if (str8 === "0") return 0;
+      if (!str9 || typeof str9 !== "string") return str9;
+      let trimmedStr = str9.trim();
+      if (options.skipLike !== void 0 && options.skipLike.test(trimmedStr)) return str9;
+      else if (str9 === "0") return 0;
       else if (options.hex && hexRegex.test(trimmedStr)) {
         return parse_int(trimmedStr, 16);
       } else if (trimmedStr.search(/[eE]/) !== -1) {
@@ -604,12 +604,12 @@ var require_strnum = __commonJS({
           } else {
             if (notation[2] === "0" && notation[3][0] === ".") {
             } else {
-              return str8;
+              return str9;
             }
           }
-          return options.eNotation ? Number(trimmedStr) : str8;
+          return options.eNotation ? Number(trimmedStr) : str9;
         } else {
-          return str8;
+          return str9;
         }
       } else {
         const match = numRegex.exec(trimmedStr);
@@ -617,29 +617,29 @@ var require_strnum = __commonJS({
           const sign = match[1];
           const leadingZeros = match[2];
           let numTrimmedByZeros = trimZeros(match[3]);
-          if (!options.leadingZeros && leadingZeros.length > 0 && sign && trimmedStr[2] !== ".") return str8;
-          else if (!options.leadingZeros && leadingZeros.length > 0 && !sign && trimmedStr[1] !== ".") return str8;
-          else if (options.leadingZeros && leadingZeros === str8) return 0;
+          if (!options.leadingZeros && leadingZeros.length > 0 && sign && trimmedStr[2] !== ".") return str9;
+          else if (!options.leadingZeros && leadingZeros.length > 0 && !sign && trimmedStr[1] !== ".") return str9;
+          else if (options.leadingZeros && leadingZeros === str9) return 0;
           else {
-            const num10 = Number(trimmedStr);
-            const numStr = "" + num10;
+            const num11 = Number(trimmedStr);
+            const numStr = "" + num11;
             if (numStr.search(/[eE]/) !== -1) {
-              if (options.eNotation) return num10;
-              else return str8;
+              if (options.eNotation) return num11;
+              else return str9;
             } else if (trimmedStr.indexOf(".") !== -1) {
-              if (numStr === "0" && numTrimmedByZeros === "") return num10;
-              else if (numStr === numTrimmedByZeros) return num10;
-              else if (sign && numStr === "-" + numTrimmedByZeros) return num10;
-              else return str8;
+              if (numStr === "0" && numTrimmedByZeros === "") return num11;
+              else if (numStr === numTrimmedByZeros) return num11;
+              else if (sign && numStr === "-" + numTrimmedByZeros) return num11;
+              else return str9;
             }
             if (leadingZeros) {
-              return numTrimmedByZeros === numStr || sign + numTrimmedByZeros === numStr ? num10 : str8;
+              return numTrimmedByZeros === numStr || sign + numTrimmedByZeros === numStr ? num11 : str9;
             } else {
-              return trimmedStr === numStr || trimmedStr === sign + numStr ? num10 : str8;
+              return trimmedStr === numStr || trimmedStr === sign + numStr ? num11 : str9;
             }
           }
         } else {
-          return str8;
+          return str9;
         }
       }
     }
@@ -724,8 +724,8 @@ var require_OrderedObjParser = __commonJS({
           "copyright": { regex: /&(copy|#169);/g, val: "\xA9" },
           "reg": { regex: /&(reg|#174);/g, val: "\xAE" },
           "inr": { regex: /&(inr|#8377);/g, val: "\u20B9" },
-          "num_dec": { regex: /&#([0-9]{1,7});/g, val: (_, str8) => String.fromCharCode(Number.parseInt(str8, 10)) },
-          "num_hex": { regex: /&#x([0-9a-fA-F]{1,6});/g, val: (_, str8) => String.fromCharCode(Number.parseInt(str8, 16)) }
+          "num_dec": { regex: /&#([0-9]{1,7});/g, val: (_, str9) => String.fromCharCode(Number.parseInt(str9, 10)) },
+          "num_hex": { regex: /&#x([0-9a-fA-F]{1,6});/g, val: (_, str9) => String.fromCharCode(Number.parseInt(str9, 16)) }
         };
         this.addExternalEntities = addExternalEntities;
         this.parseXml = parseXml;
@@ -1089,12 +1089,12 @@ var require_OrderedObjParser = __commonJS({
         tagExp += ch;
       }
     }
-    function findClosingIndex(xmlData, str8, i, errMsg) {
-      const closingIndex = xmlData.indexOf(str8, i);
+    function findClosingIndex(xmlData, str9, i, errMsg) {
+      const closingIndex = xmlData.indexOf(str9, i);
       if (closingIndex === -1) {
         throw new Error(errMsg);
       } else {
-        return closingIndex + str8.length - 1;
+        return closingIndex + str9.length - 1;
       }
     }
     function readTagExp(xmlData, i, removeNSPrefix, closingChar = ">") {
@@ -1191,7 +1191,7 @@ var require_node2json = __commonJS({
       return compress(node, options);
     }
     function compress(arr, options, jPath) {
-      let text2;
+      let text3;
       const compressedObj = {};
       for (let i = 0; i < arr.length; i++) {
         const tagObj = arr[i];
@@ -1200,8 +1200,8 @@ var require_node2json = __commonJS({
         if (jPath === void 0) newJpath = property;
         else newJpath = jPath + "." + property;
         if (property === options.textNodeName) {
-          if (text2 === void 0) text2 = tagObj[property];
-          else text2 += "" + tagObj[property];
+          if (text3 === void 0) text3 = tagObj[property];
+          else text3 += "" + tagObj[property];
         } else if (property === void 0) {
           continue;
         } else if (tagObj[property]) {
@@ -1229,9 +1229,9 @@ var require_node2json = __commonJS({
           }
         }
       }
-      if (typeof text2 === "string") {
-        if (text2.length > 0) compressedObj[options.textNodeName] = text2;
-      } else if (text2 !== void 0) compressedObj[options.textNodeName] = text2;
+      if (typeof text3 === "string") {
+        if (text3.length > 0) compressedObj[options.textNodeName] = text3;
+      } else if (text3 !== void 0) compressedObj[options.textNodeName] = text3;
       return compressedObj;
     }
     function propName(obj) {
@@ -1728,8 +1728,8 @@ function hash(k) {
   }
   return h >>> 0;
 }
-function dbFor(store10, key) {
-  return PHOTO_STORES.has(store10) && SHARDS.length ? SHARDS[hash(key) % SHARDS.length] : MAIN;
+function dbFor(store11, key) {
+  return PHOTO_STORES.has(store11) && SHARDS.length ? SHARDS[hash(key) % SHARDS.length] : MAIN;
 }
 var CACHE_DAYS = 14;
 var PART = 1e6;
@@ -1741,14 +1741,14 @@ function toBytes(v) {
   if (ArrayBuffer.isView(v)) return { bytes: new Uint8Array(v.buffer, v.byteOffset, v.byteLength), ctype: "bin" };
   return { bytes: te.encode(String(v)), ctype: "text" };
 }
-async function readRows(db, store10, key) {
-  const r = await db.prepare("SELECT part, data, meta, ctype FROM blobs WHERE store=?1 AND key=?2 ORDER BY part").bind(store10, key).all();
+async function readRows(db, store11, key) {
+  const r = await db.prepare("SELECT part, data, meta, ctype FROM blobs WHERE store=?1 AND key=?2 ORDER BY part").bind(store11, key).all();
   return r.results || [];
 }
-async function readRaw(store10, key) {
-  const db = dbFor(store10, key);
-  let rows = await readRows(db, store10, key);
-  if (!rows.length && db !== MAIN) rows = await readRows(MAIN, store10, key);
+async function readRaw(store11, key) {
+  const db = dbFor(store11, key);
+  let rows = await readRows(db, store11, key);
+  if (!rows.length && db !== MAIN) rows = await readRows(MAIN, store11, key);
   if (!rows.length) return null;
   const chunks = rows.map((x) => x.data instanceof ArrayBuffer ? new Uint8Array(x.data) : new Uint8Array(x.data));
   const total = chunks.reduce((n, c) => n + c.length, 0);
@@ -1765,17 +1765,17 @@ async function readRaw(store10, key) {
   }
   return { bytes, ctype: rows[0].ctype || "text", meta };
 }
-async function writeRaw(store10, key, bytes, ctype, meta) {
-  const DB = dbFor(store10, key);
-  if (DB !== MAIN) await MAIN.prepare("DELETE FROM blobs WHERE store=?1 AND key=?2").bind(store10, key).run();
-  const stmts = [DB.prepare("DELETE FROM blobs WHERE store=?1 AND key=?2").bind(store10, key)];
+async function writeRaw(store11, key, bytes, ctype, meta) {
+  const DB = dbFor(store11, key);
+  if (DB !== MAIN) await MAIN.prepare("DELETE FROM blobs WHERE store=?1 AND key=?2").bind(store11, key).run();
+  const stmts = [DB.prepare("DELETE FROM blobs WHERE store=?1 AND key=?2").bind(store11, key)];
   const metaStr = JSON.stringify(meta || {});
   const n = Math.max(1, Math.ceil(bytes.length / PART));
   for (let i = 0; i < n; i++) {
-    stmts.push(DB.prepare("INSERT INTO blobs (store, key, part, data, meta, ctype, updated) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(store10, key, i, bytes.slice(i * PART, (i + 1) * PART), metaStr, ctype, Date.now()));
+    stmts.push(DB.prepare("INSERT INTO blobs (store, key, part, data, meta, ctype, updated) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(store11, key, i, bytes.slice(i * PART, (i + 1) * PART), metaStr, ctype, Date.now()));
   }
   await DB.batch(stmts);
-  if (store10 === "cache" && Math.random() < 0.02) {
+  if (store11 === "cache" && Math.random() < 0.02) {
     try {
       await MAIN.prepare("DELETE FROM blobs WHERE store='cache' AND updated < ?1").bind(Date.now() - CACHE_DAYS * 864e5).run();
     } catch {
@@ -1786,15 +1786,15 @@ function convert(raw, type) {
   if (type === "arrayBuffer") return raw.bytes.buffer.slice(raw.bytes.byteOffset, raw.bytes.byteOffset + raw.bytes.byteLength);
   if (type === "blob") return new Blob([raw.bytes]);
   if (type === "stream") return new Blob([raw.bytes]).stream();
-  const text2 = td.decode(raw.bytes);
+  const text3 = td.decode(raw.bytes);
   if (type === "json") {
     try {
-      return JSON.parse(text2);
+      return JSON.parse(text3);
     } catch {
       return null;
     }
   }
-  return text2;
+  return text3;
 }
 function getStore(opt) {
   const name = typeof opt === "string" ? opt : opt?.name;
@@ -2137,16 +2137,16 @@ function fix(v) {
   if (v === void 0 || v === null) return "";
   return typeof v === "string" ? v : String(v);
 }
-async function parseStringPromise(text2, _opts) {
-  return fix(parser.parse(String(text2)));
+async function parseStringPromise(text3, _opts) {
+  return fix(parser.parse(String(text3)));
 }
 
 // ../src/lib/govApi.mts
-async function parseMaybeXml(text2) {
+async function parseMaybeXml(text3) {
   try {
-    return JSON.parse(text2);
+    return JSON.parse(text3);
   } catch {
-    return parseStringPromise(text2, { explicitArray: false, ignoreAttrs: true, trim: true });
+    return parseStringPromise(text3, { explicitArray: false, ignoreAttrs: true, trim: true });
   }
 }
 function extractItems(data) {
@@ -2173,8 +2173,8 @@ async function callGovApi(baseUrl, operation, serviceKey, params) {
     url.searchParams.set(key, String(value));
   }
   const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8e3) });
-  const text2 = await res.text();
-  const data = await parseMaybeXml(text2);
+  const text3 = await res.text();
+  const data = await parseMaybeXml(text3);
   const { resultCode, resultMsg } = extractResultCode(data);
   const items = extractItems(data);
   return {
@@ -2700,14 +2700,14 @@ var SIDO_SHORT = {
   \uC81C\uC8FC\uD2B9\uBCC4\uC790\uCE58\uB3C4: "\uC81C\uC8FC",
   \uC81C\uC8FC: "\uC81C\uC8FC"
 };
-function sidoShort(text2) {
-  const words = String(text2 ?? "").replace(/[,·ㆍ()]/g, " ").split(/\s+/).filter(Boolean);
+function sidoShort(text3) {
+  const words = String(text3 ?? "").replace(/[,·ㆍ()]/g, " ").split(/\s+/).filter(Boolean);
   for (const w of words) if (SIDO_SHORT[w]) return SIDO_SHORT[w];
   return "";
 }
 var CITY_SIDO = { \uC11C\uADC0\uD3EC: "\uC81C\uC8FC", \uC81C\uC8FC\uC2DC: "\uC81C\uC8FC", \uD55C\uB77C\uC0B0: "\uC81C\uC8FC" };
-function sidoInText(text2) {
-  const t = String(text2 ?? "");
+function sidoInText(text3) {
+  const t = String(text3 ?? "");
   for (const [k, v] of Object.entries(CITY_SIDO)) if (t.includes(k) && !Object.keys(SIDO_SHORT).some((s) => s.length > 1 && t.indexOf(s) >= 0 && t.indexOf(s) < t.indexOf(k))) return v;
   let best = "";
   let at = Infinity;
@@ -2757,10 +2757,10 @@ function normKeys(row) {
   for (const [k, v] of Object.entries(row || {})) out[k.replace(/^﻿/, "").trim()] = v;
   return out;
 }
-function shortHash(text2) {
+function shortHash(text3) {
   let h = 2166136261;
-  for (let i = 0; i < text2.length; i++) {
-    h ^= text2.charCodeAt(i);
+  for (let i = 0; i < text3.length; i++) {
+    h ^= text3.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
   return (h >>> 0).toString(36);
@@ -2890,8 +2890,8 @@ var NeedApply = class extends Error {
     this.dataset = dataset;
   }
 };
-function looksUnregistered(status, text2) {
-  return status === 401 || status === 403 || /SERVICE_KEY_IS_NOT_REGISTERED|SERVICE_ACCESS_DENIED|등록되지 않은 인증키|인증키|"code"\s*:\s*-4|<returnReasonCode>\s*(30|20)\s*</i.test(text2);
+function looksUnregistered(status, text3) {
+  return status === 401 || status === 403 || /SERVICE_KEY_IS_NOT_REGISTERED|SERVICE_ACCESS_DENIED|등록되지 않은 인증키|인증키|"code"\s*:\s*-4|<returnReasonCode>\s*(30|20)\s*</i.test(text3);
 }
 async function getText(url) {
   const res = await fetch(url, { signal: AbortSignal.timeout(12e3), headers: { Accept: "application/json" } });
@@ -2903,13 +2903,13 @@ async function fetchRecreation(key, debug) {
   let sample = null;
   for (let page = 1; rows.length < total && page <= 10; page++) {
     const url = `${RECREATION_API}?serviceKey=${encodeURIComponent(key)}&pageNo=${page}&numOfRows=1000&type=json`;
-    const { status, text: text2 } = await getText(url);
-    if (looksUnregistered(status, text2)) throw new NeedApply("recreation", text2.slice(0, 200));
+    const { status, text: text3 } = await getText(url);
+    if (looksUnregistered(status, text3)) throw new NeedApply("recreation", text3.slice(0, 200));
     let data;
     try {
-      data = JSON.parse(text2);
+      data = JSON.parse(text3);
     } catch {
-      throw new Error(`recreation: not json (${status}) ${text2.slice(0, 160)}`);
+      throw new Error(`recreation: not json (${status}) ${text3.slice(0, 160)}`);
     }
     const root = data?.response || data || {};
     const header = root.header || {};
@@ -2935,15 +2935,15 @@ async function fetchOdcloud(base, dataset, key) {
   let total = Infinity;
   for (let page = 1; rows.length < total && page <= 10; page++) {
     const url = `${base}?page=${page}&perPage=500&returnType=JSON&serviceKey=${encodeURIComponent(key)}`;
-    const { status, text: text2 } = await getText(url);
-    if (looksUnregistered(status, text2)) throw new NeedApply(dataset, text2.slice(0, 200));
+    const { status, text: text3 } = await getText(url);
+    if (looksUnregistered(status, text3)) throw new NeedApply(dataset, text3.slice(0, 200));
     let data;
     try {
-      data = JSON.parse(text2);
+      data = JSON.parse(text3);
     } catch {
-      throw new Error(`${dataset}: not json (${status}) ${text2.slice(0, 160)}`);
+      throw new Error(`${dataset}: not json (${status}) ${text3.slice(0, 160)}`);
     }
-    if (!Array.isArray(data?.data)) throw new Error(`${dataset}: ${status} ${text2.slice(0, 160)}`);
+    if (!Array.isArray(data?.data)) throw new Error(`${dataset}: ${status} ${text3.slice(0, 160)}`);
     rows.push(...data.data);
     total = Number(data.totalCount) || rows.length;
     if (!data.data.length) break;
@@ -3028,8 +3028,8 @@ var TOUR_BASE = "https://apis.data.go.kr/B551011/KorService2";
 var DEFAULT_KEY_ID = "5v6q8ev03k";
 var TTL_MS3 = 30 * 24 * 60 * 60 * 1e3;
 var TIME_BUDGET_MS = 7e3;
-async function sha1(text2) {
-  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text2));
+async function sha1(text3) {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text3));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 var r5 = (v) => Math.round(v * 1e5) / 1e5;
@@ -3059,21 +3059,21 @@ var golf_default = async (req, _context) => {
   if (denied) return denied;
   const share = await viewerShare(req);
   if (share && !share.tabs.golf) return jsonResponse({ items: [], total: 0, located: 0, pending: 0, hidden: true });
-  const store10 = getStore("cache");
-  const full = await store10.get("golf-v1", { type: "json" });
+  const store11 = getStore("cache");
+  const full = await store11.get("golf-v1", { type: "json" });
   if (full && Date.now() - (full.at || 0) < TTL_MS3) return jsonResponse({ ...full, cached: true });
   const key = Netlify.env.get("GOLF_API_KEY") || Netlify.env.get("TOUR_API_KEY") || FALLBACK_KEY4;
   const res = await fetch(`${GOLF_API}?page=1&perPage=2000&serviceKey=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(1e4) });
-  const text2 = await res.text();
+  const text3 = await res.text();
   let data;
   try {
-    data = JSON.parse(text2);
+    data = JSON.parse(text3);
   } catch {
-    return jsonResponse({ error: `not json (${res.status}) ${text2.slice(0, 120)}` }, { status: 502 });
+    return jsonResponse({ error: `not json (${res.status}) ${text3.slice(0, 120)}` }, { status: 502 });
   }
   if (data?.code === -401 || res.status === 401 || res.status === 403) return jsonResponse({ error: "need-apply", apply: [DATASET] }, { status: 503 });
   const rows = Array.isArray(data?.data) ? data.data : [];
-  if (!rows.length) return jsonResponse({ error: "empty", detail: text2.slice(0, 160) }, { status: 502 });
+  if (!rows.length) return jsonResponse({ error: "empty", detail: text3.slice(0, 160) }, { status: 502 });
   const secret = Netlify.env.get("NAVER_MAP_SECRET") || "";
   const keyId = Netlify.env.get("NAVER_MAP_KEY_ID") || DEFAULT_KEY_ID;
   const started = Date.now();
@@ -3106,7 +3106,7 @@ var golf_default = async (req, _context) => {
       const g = base[idx++];
       const q = cleanAddress(g.address);
       const gKey = `geo-v1-${await sha1(g.name + "|" + q)}`;
-      let hit = await store10.get(gKey, { type: "json" });
+      let hit = await store11.get(gKey, { type: "json" });
       if (!hit) {
         if (Date.now() - started > TIME_BUDGET_MS) {
           pending++;
@@ -3124,7 +3124,7 @@ var golf_default = async (req, _context) => {
           }
           if (!ll) ll = await findByName(g.name, g.sido, key);
           hit = ll ? { lat: r5(ll[0]), lng: r5(ll[1]) } : { none: true };
-          await store10.setJSON(gKey, hit);
+          await store11.setJSON(gKey, hit);
         } catch {
           pending++;
           items.push(g);
@@ -3141,7 +3141,7 @@ var golf_default = async (req, _context) => {
   await Promise.all(Array.from({ length: 8 }, worker));
   items.sort((a, b) => a.order - b.order);
   const out = { at: Date.now(), total: items.length, located: items.filter((x) => x.lat != null).length, pending, geocoder: secret ? "naver" : "tour-only", items };
-  if (!pending) await store10.setJSON("golf-v1", out);
+  if (!pending) await store11.setJSON("golf-v1", out);
   return jsonResponse(out, { headers: { "Cache-Control": "no-store" } });
 };
 var config7 = {
@@ -3196,12 +3196,12 @@ async function overpass(q) {
         body: "data=" + encodeURIComponent(q),
         signal: AbortSignal.timeout(12e3)
       });
-      const text2 = await res.text();
+      const text3 = await res.text();
       if (!res.ok) {
         last = `http ${res.status}`;
         continue;
       }
-      return JSON.parse(text2);
+      return JSON.parse(text3);
     } catch (err) {
       last = err?.message || String(err);
     }
@@ -3217,10 +3217,10 @@ var golfosm_default = async (req, _context) => {
   if (!(lat > 32 && lat < 39.5 && lng > 124 && lng < 132)) return jsonResponse({ error: "bad lat/lng" }, { status: 400 });
   const name = (q.get("name") || "").slice(0, 40);
   const debug = q.get("debug") === "1";
-  const store10 = getStore("cache");
+  const store11 = getStore("cache");
   const cKey = `gosm-v1-${lat.toFixed(3)},${lng.toFixed(3)}`;
   if (!debug) {
-    const hit = await store10.get(cKey, { type: "json" });
+    const hit = await store11.get(cKey, { type: "json" });
     if (hit && Date.now() - (hit.at || 0) < (hit.none ? TTL_NONE_MS : TTL_MS4)) return jsonResponse({ ...hit, cached: true });
   }
   try {
@@ -3256,7 +3256,7 @@ var golfosm_default = async (req, _context) => {
       holes
     };
     if (!out.course && !holes.length) out.none = true;
-    if (!debug) await store10.setJSON(cKey, out);
+    if (!debug) await store11.setJSON(cKey, out);
     return jsonResponse(out);
   } catch (err) {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
@@ -3409,8 +3409,8 @@ var TYPE = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" };
 var ID_RE = /^[0-9a-f-]{36}\.(jpg|png|webp)$/;
 var MAX_BYTES = 3 * 1024 * 1024;
 var store5 = () => getStore({ name: "gphotos", consistency: "strong" });
-async function sha2562(text2) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text2));
+async function sha2562(text3) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text3));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 var gphotos_default = async (req, context) => {
@@ -3530,8 +3530,8 @@ var MAX_PHOTOS = 10;
 var STATUSES = ["ok", "pending", "hidden"];
 var str4 = (v, max) => typeof v === "string" ? v.replace(/\s+$/g, "").trim().slice(0, max) : "";
 var num4 = (v) => typeof v === "number" && Number.isFinite(v) ? v : null;
-async function sha2563(text2) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text2));
+async function sha2563(text3) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text3));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 function clean(input) {
@@ -3835,8 +3835,8 @@ var heritage_default = async (req, _context) => {
       const areaCode = q.get("areaCode") || "";
       if (!/^\d{2}$/.test(kind) || !/^\d{1,2}$/.test(areaCode)) return jsonResponse({ error: "bad request" }, { status: 400 });
       const key = `hlist-v1-${kind}-${areaCode}`;
-      const store10 = getStore("cache");
-      const hit = await store10.get(key, { type: "json" });
+      const store11 = getStore("cache");
+      const hit = await store11.get(key, { type: "json" });
       if (hit && Date.now() - (hit.at || 0) < 30 * 24 * 3600 * 1e3) return jsonResponse({ ...hit, cached: true });
       const first = await fetchHeritageList({ kind, areaCode, page: 1 });
       const pages = Math.min(15, Math.ceil((first.total || 0) / first.pageUnit));
@@ -3844,7 +3844,7 @@ var heritage_default = async (req, _context) => {
       const failed = rest.some((r) => r.failed);
       const items = first.items.concat(...rest.map((r) => r.items)).filter((it) => it.lat != null && it.lng != null);
       const out = { at: Date.now(), kind, kindName: first.kindName, areaCode, total: first.total, items };
-      if (!failed) await store10.setJSON(key, out);
+      if (!failed) await store11.setJSON(key, out);
       return jsonResponse(out);
     }
     const result = await fetchHeritageList({
@@ -3867,8 +3867,8 @@ var FALLBACK_KEY5 = "";
 var TOUR_BASE2 = "https://apis.data.go.kr/B551011/KorService2";
 var GALLERY_BASE = "https://apis.data.go.kr/B551011/PhotoGalleryService1";
 var cache3 = () => getStore("cache");
-async function sha12(text2) {
-  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text2));
+async function sha12(text3) {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text3));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 var img = (v) => typeof v === "string" && /^https?:\/\//i.test(v) ? v.replace(/^http:\/\//i, "https://") : null;
@@ -3949,8 +3949,8 @@ var config14 = {
 var FALLBACK_KEY6 = "";
 var TOUR_BASE3 = "https://apis.data.go.kr/B551011/KorService2";
 var DAY = 24 * 60 * 60 * 1e3;
-async function sha13(text2) {
-  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text2));
+async function sha13(text3) {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text3));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 var dashed = (v) => {
@@ -3964,9 +3964,9 @@ var mapsearch_default = async (req, _context) => {
   if (denied) return denied;
   const q = (new URL(req.url).searchParams.get("q") || "").replace(/\s+/g, " ").trim().slice(0, 30);
   if (q.length < 2) return jsonResponse({ error: "bad query" }, { status: 400 });
-  const store10 = getStore("cache");
+  const store11 = getStore("cache");
   const cKey = `msearch-v1-${await sha13(q)}`;
-  const hit = await store10.get(cKey, { type: "json" });
+  const hit = await store11.get(cKey, { type: "json" });
   if (hit && Date.now() - (hit.at || 0) < DAY) return jsonResponse({ ...hit, cached: true });
   const key = Netlify.env.get("TOUR_API_KEY") || FALLBACK_KEY6;
   const [h, t] = await Promise.allSettled([
@@ -3981,7 +3981,7 @@ var mapsearch_default = async (req, _context) => {
     return { cat, item: cat === "\uD589\uC0AC" ? { ...base, place: address, startDate: dashed(it.eventstartdate), endDate: dashed(it.eventenddate) } : { ...base, type: cat === "\uB9DB\uC9D1" ? "restaurant" : "attraction" } };
   }) : [];
   const out = { at: Date.now(), q, heritage, tour, errors: [h, t].filter((r) => r.status === "rejected").length };
-  if (!out.errors) await store10.setJSON(cKey, out);
+  if (!out.errors) await store11.setJSON(cKey, out);
   return jsonResponse(out);
 };
 var config15 = {
@@ -4064,9 +4064,9 @@ var mtnpaths_default = async (req, _context) => {
   }
   const box = [w, s, e, n].map((v) => v.toFixed(3));
   const cKey = `vwpath-v1-${box.join("_")}`;
-  const store10 = getStore("cache");
+  const store11 = getStore("cache");
   if (!debug) {
-    const hit = await store10.get(cKey, { type: "json" });
+    const hit = await store11.get(cKey, { type: "json" });
     if (hit && Date.now() - (hit.at || 0) < TTL_MS5) return jsonResponse({ ...hit, cached: true });
   }
   try {
@@ -4075,18 +4075,18 @@ var mtnpaths_default = async (req, _context) => {
     let sample = null;
     for (let page = 1; page <= 4 && lines.length < MAX_LINES; page++) {
       const url = `${API}?service=data&request=GetFeature&data=LT_L_FRSTCLIMB&format=json&geometry=true&attribute=true&crs=EPSG:4326&size=1000&page=${page}&geomFilter=BOX(${box.join(",")})&key=${encodeURIComponent(key)}&domain=${encodeURIComponent(DOMAIN)}`;
-      let res, text2 = "";
+      let res, text3 = "";
       for (let tryNo = 0; ; tryNo++) {
         res = await fetch(url, { signal: AbortSignal.timeout(12e3), headers: { Referer: `https://${DOMAIN}/` } });
-        text2 = await res.text();
-        if (tryNo >= 1 || res.status < 500 && text2.trim().startsWith("{")) break;
+        text3 = await res.text();
+        if (tryNo >= 1 || res.status < 500 && text3.trim().startsWith("{")) break;
         await new Promise((r2) => setTimeout(r2, 600));
       }
       let data;
       try {
-        data = JSON.parse(text2);
+        data = JSON.parse(text3);
       } catch {
-        throw new Error(`vworld not json (${res.status}) ${text2.slice(0, 160)}`);
+        throw new Error(`vworld not json (${res.status}) ${text3.slice(0, 160)}`);
       }
       const r = data?.response || {};
       if (r.status === "NOT_FOUND") break;
@@ -4112,7 +4112,7 @@ var mtnpaths_default = async (req, _context) => {
       if (page >= pages) break;
     }
     const out = { at: Date.now(), configured: true, total, lines };
-    if (!debug) await store10.setJSON(cKey, out);
+    if (!debug) await store11.setJSON(cKey, out);
     return jsonResponse(debug ? { ...out, sample } : out);
   } catch (err) {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
@@ -4184,8 +4184,8 @@ function thin3(pts) {
   return out;
 }
 var norm3 = (s) => String(s ?? "").replace(/\s+|\(.*?\)/g, "");
-function looksUnregistered2(status, text2) {
-  return status === 401 || status === 403 || /SERVICE_KEY_IS_NOT_REGISTERED|SERVICE_ACCESS_DENIED|"returnReasonCode"\s*:\s*"(30|20)"|<returnReasonCode>\s*(30|20)\s*</i.test(text2);
+function looksUnregistered2(status, text3) {
+  return status === 401 || status === 403 || /SERVICE_KEY_IS_NOT_REGISTERED|SERVICE_ACCESS_DENIED|"returnReasonCode"\s*:\s*"(30|20)"|<returnReasonCode>\s*(30|20)\s*</i.test(text3);
 }
 async function fetchAll(name, key) {
   const rows = [];
@@ -4193,13 +4193,13 @@ async function fetchAll(name, key) {
   for (let page = 1; rows.length < total && page <= 30; page++) {
     const url = `${API2}?serviceKey=${encodeURIComponent(key)}&pageNo=${page}&numOfRows=1000&type=json&srchFrtrlNm=${encodeURIComponent(name)}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(12e3) });
-    const text2 = await res.text();
-    if (looksUnregistered2(res.status, text2)) return { needApply: true, rows };
+    const text3 = await res.text();
+    if (looksUnregistered2(res.status, text3)) return { needApply: true, rows };
     let data;
     try {
-      data = JSON.parse(text2);
+      data = JSON.parse(text3);
     } catch {
-      throw new Error(`not json (${res.status}) ${text2.slice(0, 160)}`);
+      throw new Error(`not json (${res.status}) ${text3.slice(0, 160)}`);
     }
     const root = data?.response || data || {};
     const code = String(root?.header?.resultCode ?? "");
@@ -4224,10 +4224,10 @@ var mtntrail_default = async (req, _context) => {
   const hasLL = Number.isFinite(lat) && Number.isFinite(lng) && lat > 32 && lng > 124;
   const debug = q.get("debug") === "1";
   if (name.length < 2) return jsonResponse({ error: "bad name" }, { status: 400 });
-  const store10 = getStore("cache");
+  const store11 = getStore("cache");
   const cKey = `mtrail-v2-${norm3(name)}`;
   if (!debug) {
-    const hit = await store10.get(cKey, { type: "json" });
+    const hit = await store11.get(cKey, { type: "json" });
     if (hit && Date.now() - (hit.at || 0) < TTL_MS6) return jsonResponse({ ...hit, cached: true });
   }
   try {
@@ -4263,7 +4263,7 @@ var mtntrail_default = async (req, _context) => {
       };
     }).filter((c) => c.points.length >= 2 && c.km >= 0.2).sort((a, b) => b.km - a.km).slice(0, 12);
     const out = { at: Date.now(), name, courses, rawCount: r.rows.length };
-    if (!debug && r.rows.length) await store10.setJSON(cKey, out);
+    if (!debug && r.rows.length) await store11.setJSON(cKey, out);
     return jsonResponse(debug ? { ...out, sample: r.rows.slice(0, 3) } : out);
   } catch (err) {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
@@ -4316,13 +4316,13 @@ function shape(raw) {
 async function search(name, key) {
   const url = `${API3}?serviceKey=${encodeURIComponent(key)}&pageNo=1&numOfRows=50&mntnNm=${encodeURIComponent(name)}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(12e3) });
-  const text2 = await res.text();
-  if (res.status === 401 || res.status === 403 || /SERVICE_KEY_IS_NOT_REGISTERED|SERVICE_ACCESS_DENIED|<returnReasonCode>\s*(30|20)\s*</i.test(text2)) return { needApply: true, items: [] };
+  const text3 = await res.text();
+  if (res.status === 401 || res.status === 403 || /SERVICE_KEY_IS_NOT_REGISTERED|SERVICE_ACCESS_DENIED|<returnReasonCode>\s*(30|20)\s*</i.test(text3)) return { needApply: true, items: [] };
   let data;
   try {
-    data = JSON.parse(text2);
+    data = JSON.parse(text3);
   } catch {
-    data = await parseStringPromise(text2, { explicitArray: false, ignoreAttrs: true, trim: true });
+    data = await parseStringPromise(text3, { explicitArray: false, ignoreAttrs: true, trim: true });
   }
   const root = data?.response || data || {};
   const code = String(root?.header?.resultCode ?? "");
@@ -4341,11 +4341,11 @@ var mtninfo_default = async (req, _context) => {
   const near = (q.get("near") || "").slice(0, 40);
   const debug = q.get("debug") === "1";
   if (name.length < 2) return jsonResponse({ error: "bad name" }, { status: 400 });
-  const store10 = getStore("cache");
+  const store11 = getStore("cache");
   const cKey = `mtninfo-v2-${norm4(name)}`;
   let list = null;
   if (!debug) {
-    const hit = await store10.get(cKey, { type: "json" });
+    const hit = await store11.get(cKey, { type: "json" });
     if (hit && Date.now() - (hit.at || 0) < TTL_MS7) list = hit.list;
   }
   let raw = [];
@@ -4356,7 +4356,7 @@ var mtninfo_default = async (req, _context) => {
       if (r.needApply) return jsonResponse({ error: "need-apply", apply: [DATASET3] }, { status: 503 });
       raw = r.items;
       list = r.items.map(shape).filter((x) => x.name);
-      await store10.setJSON(cKey, { at: Date.now(), list });
+      await store11.setJSON(cKey, { at: Date.now(), list });
     } catch (e) {
       return jsonResponse({ error: String(e?.message || e).slice(0, 200) }, { status: 502 });
     }
@@ -4462,8 +4462,8 @@ var nearby_default = async (req, _context) => {
   if (!(lat > 32 && lat < 39 && lng > 124 && lng < 132.5)) return jsonResponse({ error: "bad point" }, { status: 400 });
   const cell = [Math.round(lat * 20) / 20, Math.round(lng * 20) / 20];
   const cKey = `nearby-v1-${cell[0].toFixed(2)}_${cell[1].toFixed(2)}-${today()}`;
-  const store10 = getStore("cache");
-  const hit = await store10.get(cKey, { type: "json" });
+  const store11 = getStore("cache");
+  const hit = await store11.get(cKey, { type: "json" });
   if (hit && Date.now() - (hit.at || 0) < TTL_MS8) return jsonResponse({ ...hit, cached: true });
   const key = Netlify.env.get("TOUR_API_KEY") || FALLBACK_KEY9;
   const pts = centers(cell[0], cell[1]);
@@ -4503,7 +4503,7 @@ var nearby_default = async (req, _context) => {
   restaurants.sort(byDist);
   festivals.sort(byDist);
   const out = { at: Date.now(), lat, lng, radiusKm: RADIUS_KM, attractions, restaurants, festivals, failed };
-  if (!failed) await store10.setJSON(cKey, out);
+  if (!failed) await store11.setJSON(cKey, out);
   return jsonResponse(out);
 };
 var config21 = {
@@ -4574,8 +4574,8 @@ var num7 = (v) => {
   const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
   return Number.isFinite(n) ? n : null;
 };
-async function sha2564(text2) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text2));
+async function sha2564(text3) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text3));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 var SIDO2 = { \uC11C\uC6B8\uD2B9\uBCC4\uC2DC: "\uC11C\uC6B8", \uBD80\uC0B0\uAD11\uC5ED\uC2DC: "\uBD80\uC0B0", \uB300\uAD6C\uAD11\uC5ED\uC2DC: "\uB300\uAD6C", \uC778\uCC9C\uAD11\uC5ED\uC2DC: "\uC778\uCC9C", \uAD11\uC8FC\uAD11\uC5ED\uC2DC: "\uAD11\uC8FC", \uB300\uC804\uAD11\uC5ED\uC2DC: "\uB300\uC804", \uC6B8\uC0B0\uAD11\uC5ED\uC2DC: "\uC6B8\uC0B0", \uC138\uC885\uD2B9\uBCC4\uC790\uCE58\uC2DC: "\uC138\uC885", \uACBD\uAE30\uB3C4: "\uACBD\uAE30", \uAC15\uC6D0\uB3C4: "\uAC15\uC6D0", \uAC15\uC6D0\uD2B9\uBCC4\uC790\uCE58\uB3C4: "\uAC15\uC6D0", \uCDA9\uCCAD\uBD81\uB3C4: "\uCDA9\uBD81", \uCDA9\uCCAD\uB0A8\uB3C4: "\uCDA9\uB0A8", \uC804\uB77C\uBD81\uB3C4: "\uC804\uBD81", \uC804\uBD81\uD2B9\uBCC4\uC790\uCE58\uB3C4: "\uC804\uBD81", \uC804\uB77C\uB0A8\uB3C4: "\uC804\uB0A8", \uACBD\uC0C1\uBD81\uB3C4: "\uACBD\uBD81", \uACBD\uC0C1\uB0A8\uB3C4: "\uACBD\uB0A8", \uC81C\uC8FC\uD2B9\uBCC4\uC790\uCE58\uB3C4: "\uC81C\uC8FC" };
@@ -4743,6 +4743,114 @@ var config23 = {
   path: ["/api/picks", "/api/picks/:id"]
 };
 
+// ../netlify/functions/fixes.mts
+var store10 = () => getStore({ name: "fixes", consistency: "strong" });
+var MAX_REPORTS = 300;
+var str7 = (v, max) => typeof v === "string" ? v.replace(/[\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max) : "";
+var text2 = (v, max) => typeof v === "string" ? v.replace(/[\u0000-\u0009\u000b-\u001f]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, max) : "";
+var keyOk = (k) => k.length >= 3 && k.length <= 200;
+var num8 = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(n * 1e5) / 1e5 : null;
+};
+async function readAll3() {
+  const d = await store10().get("all", { type: "json" }).catch(() => null);
+  return { hidden: d && d.hidden || {}, edits: d && d.edits || {} };
+}
+var fixes_default = async (req, _context) => {
+  if (req.method === "OPTIONS") return corsPreflightResponse();
+  const a = await accessOf(req);
+  if (!a.canView) return jsonResponse({ error: a.needGuest ? "guest-login" : "link required" }, { status: 401 });
+  const isOwner = a.canEdit;
+  const s = store10();
+  try {
+    if (req.method === "GET") {
+      const q = new URL(req.url).searchParams;
+      if (q.get("count") || q.get("reports")) {
+        if (!isOwner) return jsonResponse({ error: "edit not allowed" }, { status: 403 });
+        const { blobs } = await s.list({ prefix: "r-" });
+        const all = (await Promise.all(blobs.map((b) => s.get(b.key, { type: "json" }).catch(() => null)))).filter(Boolean);
+        if (q.get("count")) return jsonResponse({ ok: true, unread: all.filter((r) => r.status === "new").length });
+        const names = {};
+        try {
+          (await listGuests()).forEach((g) => {
+            if (g.realName) names[g.id] = g.realName;
+          });
+        } catch {
+        }
+        all.forEach((r) => {
+          if (r.guestId && names[r.guestId]) r.realName = names[r.guestId];
+        });
+        all.sort((x, y) => (x.status === "new" ? 0 : 1) - (y.status === "new" ? 0 : 1) || String(y.at).localeCompare(String(x.at)));
+        return jsonResponse({ ok: true, items: all });
+      }
+      const d2 = await readAll3();
+      return jsonResponse({ ok: true, hidden: isOwner ? d2.hidden : Object.fromEntries(Object.keys(d2.hidden).map((k) => [k, 1])), edits: d2.edits });
+    }
+    if (req.method !== "POST") return jsonResponse({ error: "method not allowed" }, { status: 405 });
+    const body = await req.json().catch(() => ({}));
+    const act = String(body?.action || "");
+    const key = str7(body?.key, 200);
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    if (act === "report") {
+      if (!keyOk(key)) return jsonResponse({ error: "bad key" }, { status: 400 });
+      const t = text2(body?.text, 500);
+      if (t.length < 2) return jsonResponse({ error: "text required" }, { status: 400 });
+      const { blobs } = await s.list({ prefix: "r-" });
+      if (blobs.length >= MAX_REPORTS) return jsonResponse({ error: "too many" }, { status: 429 });
+      const item = {
+        id: crypto.randomUUID(),
+        key,
+        title: str7(body?.title, 80),
+        cat: str7(body?.cat, 20),
+        text: t,
+        lat: num8(body?.lat),
+        lng: num8(body?.lng),
+        by: isOwner ? "\uC6B4\uC601\uC790" : a.guest ? a.guest.nickname : "\uAC8C\uC2A4\uD2B8",
+        guestId: a.guest ? a.guest.id : null,
+        status: "new",
+        at: now
+      };
+      await s.setJSON("r-" + item.id, item);
+      return jsonResponse({ ok: true }, { status: 201 });
+    }
+    if (!isOwner) return jsonResponse({ error: "edit not allowed" }, { status: 403 });
+    if (act === "rstatus" || act === "rdel") {
+      const id = String(body?.id || "");
+      if (!/^[0-9a-f-]{36}$/.test(id)) return jsonResponse({ error: "not found" }, { status: 404 });
+      if (act === "rdel") {
+        await s.delete("r-" + id);
+        return jsonResponse({ ok: true });
+      }
+      const cur = await s.get("r-" + id, { type: "json" });
+      if (!cur) return jsonResponse({ error: "not found" }, { status: 404 });
+      const st = ["new", "done", "dismiss"].includes(body?.status) ? body.status : "done";
+      await s.setJSON("r-" + id, { ...cur, status: st, doneAt: now });
+      return jsonResponse({ ok: true });
+    }
+    if (!keyOk(key)) return jsonResponse({ error: "bad key" }, { status: 400 });
+    const d = await readAll3();
+    if (act === "hide") d.hidden[key] = { title: str7(body?.title, 80), cat: str7(body?.cat, 20), at: now };
+    else if (act === "unhide") delete d.hidden[key];
+    else if (act === "edit") {
+      const f = body?.fix || {};
+      const fix2 = { title: str7(f.title, 80), addr: str7(f.addr, 150), tel: str7(f.tel, 30), hours: text2(f.hours, 200), note: text2(f.note, 500) };
+      Object.keys(fix2).forEach((k) => {
+        if (!fix2[k]) delete fix2[k];
+      });
+      if (Object.keys(fix2).length) d.edits[key] = { ...fix2, orig: str7(body?.title, 80), cat: str7(body?.cat, 20), at: now };
+      else delete d.edits[key];
+    } else return jsonResponse({ error: "bad action" }, { status: 400 });
+    await s.setJSON("all", d);
+    return jsonResponse({ ok: true, hidden: d.hidden, edits: d.edits });
+  } catch (err) {
+    return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
+  }
+};
+var config24 = {
+  path: "/api/fixes"
+};
+
 // ../netlify/functions/placedetail.mts
 var FALLBACK_KEY10 = "";
 var TOUR_BASE5 = "https://apis.data.go.kr/B551011/KorService2";
@@ -4760,8 +4868,8 @@ var INTRO = {
   "32": [["infocenterlodging", "\uBB38\uC758 \uBC0F \uC548\uB0B4"], ["checkintime", "\uC785\uC2E4"], ["checkouttime", "\uD1F4\uC2E4"], ["parkinglodging", "\uC8FC\uCC28"], ["reservationlodging", "\uC608\uC57D \uC548\uB0B4"]],
   "14": [["usetimeculture", "\uC774\uC6A9\uC2DC\uAC04"], ["restdateculture", "\uC26C\uB294\uB0A0"], ["usefee", "\uC774\uC6A9 \uC694\uAE08"], ["parkingculture", "\uC8FC\uCC28"], ["infocenterculture", "\uBB38\uC758 \uBC0F \uC548\uB0B4"]]
 };
-async function sha14(text2) {
-  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text2));
+async function sha14(text3) {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text3));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 function km4(aLat, aLng, bLat, bLng) {
@@ -4784,7 +4892,7 @@ var placedetail_default = async (req, _context) => {
     let id = q.get("id") || "";
     let type = q.get("type") || "";
     const debug = q.get("debug") === "1";
-    const store10 = getStore("cache");
+    const store11 = getStore("cache");
     const key = Netlify.env.get("TOUR_API_KEY") || FALLBACK_KEY10;
     let matched = "";
     const name = (q.get("q") || "").replace(/\(.*?\)/g, " ").replace(/\s+/g, " ").trim().slice(0, 40);
@@ -4793,7 +4901,7 @@ var placedetail_default = async (req, _context) => {
       const hasLL = Number.isFinite(lat) && Number.isFinite(lng) && lat > 32 && lng > 124;
       const radius = Math.min(Math.max(Number(q.get("r")) || 3, 0.5), 8);
       const qKey = `pdq2-${await sha14(name + "|" + (hasLL ? lat.toFixed(3) + "," + lng.toFixed(3) : "") + "|" + radius)}`;
-      let found = debug ? null : await store10.get(qKey, { type: "json" });
+      let found = debug ? null : await store11.get(qKey, { type: "json" });
       if (!found) {
         const norm7 = (t) => String(t || "").replace(/\(.*?\)|\s+/g, "");
         const isForest = /(휴양림|산림욕장|휴양마을)$/.test(name.replace(/\s+/g, ""));
@@ -4822,7 +4930,7 @@ var placedetail_default = async (req, _context) => {
           if (best && best.firstimage) break;
         }
         found = best ? { id: String(best.contentid), type: String(best.contenttypeid), title: clean4(best.title), image: https(best.firstimage) } : { none: true };
-        if (!debug && anyOk) await store10.setJSON(qKey, found);
+        if (!debug && anyOk) await store11.setJSON(qKey, found);
       }
       if (found.none) return jsonResponse({ none: true, info: [], images: [] });
       if (q.get("lite") === "1") return jsonResponse({ matched: found.title || "", image: found.image || "" });
@@ -4833,7 +4941,7 @@ var placedetail_default = async (req, _context) => {
     if (!/^\d{1,12}$/.test(id) || !/^\d{2}$/.test(type)) return jsonResponse({ error: "bad request" }, { status: 400 });
     const cKey = `pd2-${type}-${id}`;
     if (!debug) {
-      const hit = await store10.get(cKey, { type: "json" });
+      const hit = await store11.get(cKey, { type: "json" });
       if (hit) return jsonResponse({ ...hit, matched, cached: true });
     }
     const [common, intro, image] = await Promise.all([
@@ -4866,13 +4974,13 @@ var placedetail_default = async (req, _context) => {
     if (matched) out.matched = matched;
     const ok = common.ok || intro.ok || image.ok;
     if (debug) out.debug = { common: [common.resultCode, common.resultMsg, Object.keys(c)], intro: [intro.resultCode, Object.keys(it)], image: [image.resultCode, image.items.length] };
-    else if (ok) await store10.setJSON(cKey, out);
+    else if (ok) await store11.setJSON(cKey, out);
     return jsonResponse(out);
   } catch (err) {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config24 = {
+var config25 = {
   path: "/api/placedetail"
 };
 
@@ -4880,8 +4988,8 @@ var config24 = {
 var FALLBACK_KEY11 = "";
 var TOUR_BASE6 = "https://apis.data.go.kr/B551011/KorService2";
 var cache4 = () => getStore("cache");
-async function sha15(text2) {
-  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text2));
+async function sha15(text3) {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text3));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 var okCode2 = (c) => c === "0000" || c === "00";
@@ -4910,7 +5018,7 @@ var placesearch_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config25 = {
+var config26 = {
   path: "/api/placesearch"
 };
 
@@ -4939,7 +5047,7 @@ var restaurants_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config26 = {
+var config27 = {
   path: "/api/restaurants"
 };
 
@@ -4971,12 +5079,12 @@ var route_default = async (req, _context) => {
       signal: AbortSignal.timeout(1e4),
       headers: { "x-ncp-apigw-api-key-id": keyId, "x-ncp-apigw-api-key": secret }
     });
-    const text2 = await res.text();
+    const text3 = await res.text();
     let data;
     try {
-      data = JSON.parse(text2);
+      data = JSON.parse(text3);
     } catch {
-      return jsonResponse({ error: "naver", status: res.status, message: text2.slice(0, 160) }, { status: 502 });
+      return jsonResponse({ error: "naver", status: res.status, message: text3.slice(0, 160) }, { status: 502 });
     }
     if (!res.ok) {
       return jsonResponse({ error: "naver", status: res.status, message: data?.error?.message || data?.message || "" }, { status: 502 });
@@ -5006,7 +5114,7 @@ var route_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config27 = {
+var config28 = {
   path: "/api/route"
 };
 
@@ -5014,8 +5122,8 @@ var config27 = {
 var KEY5 = "all";
 var stories = () => getStore({ name: "stories", consistency: "strong" });
 var photos3 = () => getStore({ name: "photos", consistency: "strong" });
-var str7 = (v, max) => typeof v === "string" ? v.trim().slice(0, max) : "";
-var num8 = (v) => typeof v === "number" && Number.isFinite(v) ? v : null;
+var str8 = (v, max) => typeof v === "string" ? v.trim().slice(0, max) : "";
+var num9 = (v) => typeof v === "number" && Number.isFinite(v) ? v : null;
 var PHOTO_RE4 = /^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/;
 var MAX_PHOTOS3 = 40;
 function photoList(input) {
@@ -5030,22 +5138,22 @@ function photoList(input) {
 function clean5(input) {
   const photoIds = photoList(input);
   return {
-    title: str7(input?.title, 200) || "\uC81C\uBAA9 \uC5C6\uC74C",
+    title: str8(input?.title, 200) || "\uC81C\uBAA9 \uC5C6\uC74C",
     date: /^\d{4}-\d{2}-\d{2}$/.test(input?.date) ? input.date : (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
-    category: str7(input?.category, 20) || "\uAE30\uD0C0",
-    place: str7(input?.place, 300),
-    region: str7(input?.region, 20),
-    memo: str7(input?.memo, 2e4),
+    category: str8(input?.category, 20) || "\uAE30\uD0C0",
+    place: str8(input?.place, 300),
+    region: str8(input?.region, 20),
+    memo: str8(input?.memo, 2e4),
     photoIds,
     photoId: photoIds[0] || null,
     // 첫 장 (예전 화면과의 호환용)
-    lat: num8(input?.lat),
-    lng: num8(input?.lng),
+    lat: num9(input?.lat),
+    lng: num9(input?.lng),
     golf: cleanGolf(input?.golf),
     hike: cleanHike(input?.hike)
   };
 }
-async function readAll3() {
+async function readAll4() {
   const data = await stories().get(KEY5, { type: "json" });
   return Array.isArray(data) ? data : [];
 }
@@ -5056,7 +5164,7 @@ var stories_default = async (req, context) => {
   const id = context.params?.id;
   try {
     if (req.method === "GET") {
-      let items = (await readAll3()).map((s) => ({ ...s, photoIds: photoList(s) }));
+      let items = (await readAll4()).map((s) => ({ ...s, photoIds: photoList(s) }));
       const share = await viewerShare(req);
       if (share) {
         const hidden = new Set(share.hiddenStories);
@@ -5068,13 +5176,13 @@ var stories_default = async (req, context) => {
     if (req.method === "POST" && !id) {
       const now = (/* @__PURE__ */ new Date()).toISOString();
       const item = { id: crypto.randomUUID(), ...clean5(await req.json()), createdAt: now, updatedAt: now };
-      const items = await readAll3();
+      const items = await readAll4();
       items.push(item);
       await stories().setJSON(KEY5, items);
       return jsonResponse({ item }, { status: 201 });
     }
     if (req.method === "PUT" && id) {
-      const items = await readAll3();
+      const items = await readAll4();
       const idx = items.findIndex((s) => s.id === id);
       if (idx < 0) return jsonResponse({ error: "not found" }, { status: 404 });
       const oldPhotos = photoList(items[idx]);
@@ -5084,7 +5192,7 @@ var stories_default = async (req, context) => {
       return jsonResponse({ item: items[idx] });
     }
     if (req.method === "DELETE" && id) {
-      const items = await readAll3();
+      const items = await readAll4();
       const target = items.find((s) => s.id === id);
       if (!target) return jsonResponse({ ok: true });
       await stories().setJSON(KEY5, items.filter((s) => s.id !== id));
@@ -5096,7 +5204,7 @@ var stories_default = async (req, context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config28 = {
+var config29 = {
   path: ["/api/stories", "/api/stories/:id"]
 };
 
@@ -5126,8 +5234,8 @@ function parseGpx(xml) {
   for (let i = 0; i < MAX_POINTS; i++) thin4.push(pts[Math.round(i * step)]);
   return thin4;
 }
-async function sha16(text2) {
-  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text2));
+async function sha16(text3) {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text3));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 var trailroute_default = async (req, _context) => {
@@ -5158,7 +5266,7 @@ var trailroute_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config29 = {
+var config30 = {
   path: "/api/trailroute"
 };
 
@@ -5174,9 +5282,9 @@ function extractPoint(travelerinfo, label) {
   }
   return null;
 }
-function cleanText(text2) {
-  if (!text2) return null;
-  return text2.replace(/<br\s*\/?>/gi, "\n").trim();
+function cleanText(text3) {
+  if (!text3) return null;
+  return text3.replace(/<br\s*\/?>/gi, "\n").trim();
 }
 function normalize3(rawItem) {
   return {
@@ -5228,7 +5336,7 @@ var trails_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config30 = {
+var config31 = {
   path: "/api/trails"
 };
 
@@ -5244,8 +5352,8 @@ var DATASETS2 = {
 var MT_TTL_MS = 10 * 60 * 1e3;
 var NeedApply2 = class extends Error {
 };
-function looksUnregistered3(status, text2) {
-  return status === 401 || status === 403 || /SERVICE_KEY_IS_NOT_REGISTERED|SERVICE_ACCESS_DENIED|"returnReasonCode"\s*:\s*"(30|20)"|<returnReasonCode>\s*(30|20)\s*</i.test(text2);
+function looksUnregistered3(status, text3) {
+  return status === 401 || status === 403 || /SERVICE_KEY_IS_NOT_REGISTERED|SERVICE_ACCESS_DENIED|"returnReasonCode"\s*:\s*"(30|20)"|<returnReasonCode>\s*(30|20)\s*</i.test(text3);
 }
 function itemsOf(data) {
   const root = data?.response || data || {};
@@ -5258,12 +5366,12 @@ function itemsOf(data) {
 }
 async function getJson(url) {
   const res = await fetch(url, { signal: AbortSignal.timeout(9e3) });
-  const text2 = await res.text();
-  if (looksUnregistered3(res.status, text2)) throw new NeedApply2();
+  const text3 = await res.text();
+  if (looksUnregistered3(res.status, text3)) throw new NeedApply2();
   try {
-    return JSON.parse(text2);
+    return JSON.parse(text3);
   } catch {
-    throw new Error(`not json (${res.status}) ${text2.slice(0, 120)}`);
+    throw new Error(`not json (${res.status}) ${text3.slice(0, 120)}`);
   }
 }
 function toGrid(lat, lng) {
@@ -5301,16 +5409,16 @@ function prevBase(b) {
   const ms = Date.UTC(y, m, d, h - 9) - 3 * 3600 * 1e3 + 20 * 60 * 1e3;
   return latestBase(ms);
 }
-var num9 = (v) => {
+var num10 = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
-async function forecast(lat, lng, key, store10) {
+async function forecast(lat, lng, key, store11) {
   const { nx, ny } = toGrid(lat, lng);
   let base = latestBase();
   for (let attempt = 0; attempt < 2; attempt++) {
     const cKey = `wx-v1-${nx}-${ny}-${base.date}${base.time}`;
-    const hit = await store10.get(cKey, { type: "json" });
+    const hit = await store11.get(cKey, { type: "json" });
     if (hit) return { ...hit, cached: true };
     const url = `${FCST_API}?serviceKey=${encodeURIComponent(key)}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${base.date}&base_time=${base.time}&nx=${nx}&ny=${ny}`;
     const items = itemsOf(await getJson(url));
@@ -5327,25 +5435,25 @@ async function forecast(lat, lng, key, store10) {
       const v = it.fcstValue;
       switch (it.category) {
         case "TMP":
-          h.tmp = num9(v);
+          h.tmp = num10(v);
           break;
         case "SKY":
-          h.sky = num9(v);
+          h.sky = num10(v);
           break;
         case "PTY":
-          h.pty = num9(v);
+          h.pty = num10(v);
           break;
         case "POP":
-          h.pop = num9(v);
+          h.pop = num10(v);
           break;
         case "WSD":
-          h.wsd = num9(v);
+          h.wsd = num10(v);
           break;
         case "VEC":
-          h.vec = num9(v);
+          h.vec = num10(v);
           break;
         case "REH":
-          h.reh = num9(v);
+          h.reh = num10(v);
           break;
         case "PCP":
           h.pcp = String(v);
@@ -5357,7 +5465,7 @@ async function forecast(lat, lng, key, store10) {
         case "TMX": {
           const d = String(it.fcstDate);
           if (!days.has(d)) days.set(d, { d });
-          days.get(d)[it.category === "TMN" ? "tmn" : "tmx"] = num9(v);
+          days.get(d)[it.category === "TMN" ? "tmn" : "tmx"] = num10(v);
           break;
         }
       }
@@ -5387,25 +5495,25 @@ async function forecast(lat, lng, key, store10) {
       };
     }).slice(0, 4);
     const out = { at: Date.now(), nx, ny, base: base.date + base.time, days: dayList, hours: hours.slice(0, 48) };
-    await store10.setJSON(cKey, out);
+    await store11.setJSON(cKey, out);
     return out;
   }
   return { nx, ny, none: true, days: [], hours: [] };
 }
-async function nowcast(lat, lng, key, store10) {
+async function nowcast(lat, lng, key, store11) {
   const { nx, ny } = toGrid(lat, lng);
   for (const back of [45, 105]) {
     const k = kstParts(Date.now() - back * 60 * 1e3);
     const base = { date: k.date, time: String(k.hour).padStart(2, "0") + "00" };
     const cKey = `wxn-v1-${nx}-${ny}-${base.date}${base.time}`;
-    const hit = await store10.get(cKey, { type: "json" });
+    const hit = await store11.get(cKey, { type: "json" });
     if (hit) return hit;
     const url = `${NOW_API}?serviceKey=${encodeURIComponent(key)}&pageNo=1&numOfRows=20&dataType=JSON&base_date=${base.date}&base_time=${base.time}&nx=${nx}&ny=${ny}`;
     const items = itemsOf(await getJson(url));
     if (!items.length) continue;
     const o = { base: base.date + base.time };
     for (const it of items) {
-      const v = num9(it.obsrValue);
+      const v = num10(it.obsrValue);
       switch (it.category) {
         case "T1H":
           o.tmp = v;
@@ -5428,14 +5536,14 @@ async function nowcast(lat, lng, key, store10) {
       }
     }
     if (o.tmp == null) continue;
-    await store10.setJSON(cKey, o);
+    await store11.setJSON(cKey, o);
     return o;
   }
   return null;
 }
 var norm5 = (s) => String(s ?? "").replace(/\s+|\(.*?\)/g, "");
-async function mountainObs(name, key, store10) {
-  let all = await store10.get("mtwx-v1-all", { type: "json" });
+async function mountainObs(name, key, store11) {
+  let all = await store11.get("mtwx-v1-all", { type: "json" });
   if (!all || Date.now() - (all.at || 0) > MT_TTL_MS) {
     const baseUrl = `${MT_API}?ServiceKey=${encodeURIComponent(key)}&pageNo=1&numOfRows=1000&_type=json`;
     let rows = itemsOf(await getJson(baseUrl));
@@ -5453,17 +5561,17 @@ async function mountainObs(name, key, store10) {
         name: String(r.obsname ?? "").trim(),
         area: String(r.localarea ?? ""),
         tm: String(r.tm ?? ""),
-        t2: num9(r.tm2m),
-        t10: num9(r.tm10m),
-        h2: num9(r.hm2m),
-        ws2: num9(r.ws2m),
-        ws10: num9(r.ws10m),
+        t2: num10(r.tm2m),
+        t10: num10(r.tm10m),
+        h2: num10(r.hm2m),
+        ws2: num10(r.ws2m),
+        ws10: num10(r.ws10m),
         wd: String(r.wd10mstr || r.wd2mstr || ""),
-        rn: num9(r.rn ?? r.cprn),
-        pa: num9(r.pa)
+        rn: num10(r.rn ?? r.cprn),
+        pa: num10(r.pa)
       }))
     };
-    if (all.rows.length) await store10.setJSON("mtwx-v1-all", all);
+    if (all.rows.length) await store11.setJSON("mtwx-v1-all", all);
   }
   const base = norm5(name);
   const paren = (name.match(/\((.*?)\)/) || [])[1] || "";
@@ -5484,23 +5592,23 @@ var weather_default = async (req, _context) => {
   if (!(lat > 32 && lat < 39.5 && lng > 124 && lng < 132)) return jsonResponse({ error: "bad lat/lng" }, { status: 400 });
   const mt = (q.get("mt") || "").replace(/\s+/g, " ").trim().slice(0, 30);
   const key = Netlify.env.get("WEATHER_API_KEY") || Netlify.env.get("TOUR_API_KEY") || FALLBACK_KEY14;
-  const store10 = getStore("cache");
+  const store11 = getStore("cache");
   const apply = [];
   const out = { apply };
   const jobs = [
-    forecast(lat, lng, key, store10).then((f) => {
+    forecast(lat, lng, key, store11).then((f) => {
       out.fcst = f;
     }).catch((err) => {
       if (err instanceof NeedApply2) apply.push(DATASETS2.fcst);
       else out.fcstError = String(err?.message || err).slice(0, 160);
     })
   ];
-  jobs.push(nowcast(lat, lng, key, store10).then((n) => {
+  jobs.push(nowcast(lat, lng, key, store11).then((n) => {
     if (n) out.now = n;
   }).catch(() => {
   }));
   if (mt.length >= 2) {
-    jobs.push(mountainObs(mt, key, store10).then((m) => {
+    jobs.push(mountainObs(mt, key, store11).then((m) => {
       out.mt = m;
     }).catch((err) => {
       if (err instanceof NeedApply2) apply.push(DATASETS2.mt);
@@ -5510,7 +5618,7 @@ var weather_default = async (req, _context) => {
   await Promise.all(jobs);
   return jsonResponse(out, { headers: { "Cache-Control": "no-store" } });
 };
-var config31 = {
+var config32 = {
   path: "/api/weather"
 };
 
@@ -5521,8 +5629,8 @@ var WIKIDATA = "https://www.wikidata.org/w/api.php";
 var UA2 = "TravelStory/1.0 (https://travel-story-api.netlify.app; personal travel diary)";
 var TTL_MS9 = 30 * 24 * 60 * 60 * 1e3;
 var MAX_IMAGES = 6;
-async function sha17(text2) {
-  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text2));
+async function sha17(text3) {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text3));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 async function mw(base, params) {
@@ -5572,10 +5680,10 @@ var wiki_default = async (req, _context) => {
   const addr = (q.get("addr") || "").slice(0, 60);
   const debug = q.get("debug") === "1";
   if (base.length < 2) return jsonResponse({ error: "bad query" }, { status: 400 });
-  const store10 = getStore("cache");
+  const store11 = getStore("cache");
   const cKey = `wiki-v1-${await sha17(name + "|" + (hasLL ? lat.toFixed(2) + "," + lng.toFixed(2) : "") + "|" + addr)}`;
   if (!debug) {
-    const hit = await store10.get(cKey, { type: "json" });
+    const hit = await store11.get(cKey, { type: "json" });
     if (hit && Date.now() - (hit.at || 0) < TTL_MS9) return jsonResponse({ ...hit, cached: true });
   }
   try {
@@ -5614,7 +5722,7 @@ var wiki_default = async (req, _context) => {
     }
     if (!page) {
       const out2 = { at: Date.now(), none: true, images: [] };
-      if (!debug) await store10.setJSON(cKey, out2);
+      if (!debug) await store11.setJSON(cKey, out2);
       return jsonResponse(out2);
     }
     const files = [];
@@ -5676,13 +5784,13 @@ var wiki_default = async (req, _context) => {
       textLicense: "CC BY-SA 4.0",
       images
     };
-    if (!debug) await store10.setJSON(cKey, out);
+    if (!debug) await store11.setJSON(cKey, out);
     return jsonResponse(out);
   } catch (err) {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config32 = {
+var config33 = {
   path: "/api/wiki"
 };
 
@@ -5735,15 +5843,16 @@ for (const [fn, cfg] of [
   [nearby_default, config21],
   [photos_default, config22],
   [picks_default, config23],
-  [placedetail_default, config24],
-  [placesearch_default, config25],
-  [restaurants_default, config26],
-  [route_default, config27],
-  [stories_default, config28],
-  [trailroute_default, config29],
-  [trails_default, config30],
-  [weather_default, config31],
-  [wiki_default, config32]
+  [fixes_default, config24],
+  [placedetail_default, config25],
+  [placesearch_default, config26],
+  [restaurants_default, config27],
+  [route_default, config28],
+  [stories_default, config29],
+  [trailroute_default, config30],
+  [trails_default, config31],
+  [weather_default, config32],
+  [wiki_default, config33]
 ]) {
   const paths = Array.isArray(cfg?.path) ? cfg.path : [cfg?.path];
   for (const p of paths) {
@@ -5793,10 +5902,10 @@ async function handleImport(req, env) {
   if (await cfg.get("importLocked")) return json({ error: "locked" }, 410);
   const u = new URL(req.url);
   if (u.searchParams.get("raw")) {
-    const store10 = u.searchParams.get("store") || "", key = u.searchParams.get("key") || "";
-    if (!["photos", "gphotos"].includes(store10) || !/^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/.test(key)) return json({ error: "bad key" }, 400);
-    const meta = store10 === "gphotos" ? { author: "imported", at: Date.now() } : {};
-    await getStore(store10).set(key, new Uint8Array(await req.arrayBuffer()), { metadata: meta });
+    const store11 = u.searchParams.get("store") || "", key = u.searchParams.get("key") || "";
+    if (!["photos", "gphotos"].includes(store11) || !/^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/.test(key)) return json({ error: "bad key" }, 400);
+    const meta = store11 === "gphotos" ? { author: "imported", at: Date.now() } : {};
+    await getStore(store11).set(key, new Uint8Array(await req.arrayBuffer()), { metadata: meta });
     return json({ ok: true, n: 1 });
   }
   const body = await req.json();

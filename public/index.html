@@ -508,6 +508,14 @@
   .pick-res, .pick-chosen { display: flex; flex-direction: column; text-align: left; border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
   .pick-chosen { cursor: default; border-color: var(--accent); gap: 2px; } .pick-res small, .pick-chosen small { color: var(--ink-dim); font-size: 12px; }
   .pk-yt { margin: 4px 0 12px; } .pk-yt summary { cursor: pointer; font-weight: 700; font-size: 0.9rem; margin-bottom: 8px; }
+  .fix-sec .chip-row { margin-top: 6px; }
+  .fix-form { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-top: 8px; }
+  .fix-form .field { margin-bottom: 8px; }
+  .fix-row { border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; margin: 6px 0; display: flex; flex-direction: column; gap: 6px; }
+  .fix-row.new { border-color: var(--danger); }
+  .fix-row small { color: var(--ink-dim); font-size: 12px; display: inline; }
+  .fix-row > div > small:last-child { display: block; margin-top: 2px; }
+  .fix-text { white-space: pre-wrap; margin: 4px 0; }
   #print-root { display: none; }
   @media print {
     @page { size: A4 portrait; margin: 10mm; }
@@ -985,6 +993,7 @@
           <button type="button" class="chip" data-layer="문화유산" style="--c:#a8552d">문화유산 <span class="near-n" data-nearn="문화유산"></span></button>
           <button type="button" class="chip" data-layer="행사" style="--c:#7d4fc4">행사 <span class="near-n" data-nearn="행사"></span></button>
           <button type="button" class="chip" data-layer="맛집" style="--c:#d9651c">맛집 <span class="near-n" data-nearn="맛집"></span></button>
+          <button type="button" class="chip" data-layer="내 장소" style="--c:#c73a78">내 장소 <span class="near-n" data-nearn="내 장소"></span></button>
       </div>
       <!-- (예전 "보기" 줄: 위 단추들이 같은 일을 하므로 숨겨 둔다) -->
       <div class="chip-row near-row" id="near-chips" hidden></div>
@@ -3158,6 +3167,160 @@
   var customReady = authReady.then(function () { return api('customimages'); }).then(function (j) { custom = j.items || {}; }).catch(function (err) {
     console.error('[custom images] load failed', err);
   });
+  // ===== 운영자: 항목 지우기(모두에게 숨기기) · 정보 고치기 / 게스트: 정보 오류 알리기 =====
+  // 원래 자료(공공데이터 등)는 그대로 두고, 앱에서 보여 줄 때만 숨기거나 고친 내용을 덮어 쓴다.
+  var fixes = { hidden: {}, edits: {} };
+  var fixesReady = authReady.then(function () { return api('fixes', { quiet: true }); }).then(function (j) {
+    fixes.hidden = j.hidden || {}; fixes.edits = j.edits || {};
+    refreshFixed();
+  }).catch(function () {});
+  function fixKey(cat, view) {
+    if (!view) return null;
+    if (view.key) return String(view.key).slice(0, 200);
+    if (view.lat == null || view.lng == null || !view.title) return null;
+    return ('v:' + String(cat || '') + ':' + String(view.__origTitle || view.title).slice(0, 60) + '@' + Number(view.lat).toFixed(4) + ',' + Number(view.lng).toFixed(4)).slice(0, 200);
+  }
+  function isHiddenKey(k) { return !!(k && fixes.hidden[k]); }
+  function fixRow(view, re, label, val) {
+    var hit = false;
+    view.rows = (view.rows || []).map(function (r) { if (!hit && r && re.test(String(r[0]))) { hit = true; return [r[0], val]; } return r; });
+    if (!hit) view.rows.push([label, val]);
+  }
+  // 고친 정보를 화면용 자료(view)에 덮어 쓴다. 같은 view 에 두 번 해도 괜찮다.
+  function applyFix(cat, view) {
+    if (!view) return view;
+    if (!view.__orig) view.__orig = { title: view.title, rows: (view.rows || []).slice(), place: view.place, tel: view.tel };
+    view.__origTitle = view.__orig.title;
+    var k = fixKey(cat, view);
+    view.fixKey = k;
+    var e = k && fixes.edits[k];
+    if (view.__fixApplied === (e || null)) return view;
+    view.title = view.__orig.title; view.rows = view.__orig.rows.slice(); view.place = view.__orig.place; view.tel = view.__orig.tel;
+    view.__fixApplied = e || null;
+    if (!e) return view;
+    if (e.title) view.title = e.title;
+    if (e.addr) { fixRow(view, /주소|소재지|위치/, '주소', e.addr); view.place = e.addr; }
+    if (e.tel) { fixRow(view, /전화|문의/, '전화', e.tel); view.tel = e.tel; }
+    if (e.hours) fixRow(view, /시간|영업|운영일/, '운영 시간', e.hours);
+    if (e.note) view.rows.push(['📝 운영자 안내', e.note]);
+    return view;
+  }
+  // 카드에 번호를 달아 두고, 지운 항목이면 감춘다
+  function markFix(card, cat, view) {
+    var k = view.fixKey || fixKey(cat, view);
+    if (!k) return card;
+    card.setAttribute('data-fk', k);
+    if (isHiddenKey(k)) card.hidden = true;
+    return card;
+  }
+  function refreshFixed() {
+    document.querySelectorAll('[data-fk]').forEach(function (c) { c.hidden = isHiddenKey(c.getAttribute('data-fk')); });
+    if (Object.keys(fixes.hidden).length && state.view === 'map' && typeof renderMap === 'function' && state.map) renderMap();
+  }
+  function postFix(body) {
+    return api('fixes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (j) {
+      if (j && j.hidden) fixes.hidden = j.hidden;
+      if (j && j.edits) fixes.edits = j.edits;
+      return j;
+    });
+  }
+  // 고치기 양식 (상세 화면과 관리 화면에서 같이 쓴다)
+  function fixForm(key, cat, origTitle, place, onSaved) {
+    var e = fixes.edits[key] || {};
+    var f = el('<div class="fix-form">' +
+      '<div class="field"><label>이름</label><input data-ff="title" maxlength="80" placeholder="' + escapeHtml(origTitle || '') + '" value="' + escapeHtml(e.title || '') + '"></div>' +
+      '<div class="field"><label>주소</label><input data-ff="addr" maxlength="150" placeholder="' + escapeHtml(place || '바뀐 주소') + '" value="' + escapeHtml(e.addr || '') + '"></div>' +
+      '<div class="field"><label>전화</label><input data-ff="tel" maxlength="30" inputmode="tel" placeholder="예: 02-123-4567" value="' + escapeHtml(e.tel || '') + '"></div>' +
+      '<div class="field"><label>운영 시간</label><input data-ff="hours" maxlength="200" placeholder="예: 11:00~21:00, 월요일 휴무" value="' + escapeHtml(e.hours || '') + '"></div>' +
+      '<div class="field"><label>운영자 안내</label><textarea data-ff="note" rows="2" maxlength="500" placeholder="예: 2026년 9월 폐업 / 주차는 뒤편 공영주차장">' + escapeHtml(e.note || '') + '</textarea></div>' +
+      '<div class="copy-hint">바꿀 칸만 적으세요. 비운 칸은 원래 자료가 그대로 보여요.</div>' +
+      '<div class="chip-row"><button type="button" class="chip" data-ffsave>💾 저장</button>' + (fixes.edits[key] ? '<button type="button" class="chip" data-ffreset>↩ 원래대로</button>' : '') + '</div>' +
+      '<div class="status-line" data-ffmsg hidden></div></div>');
+    function send(fix) {
+      var msg = f.querySelector('[data-ffmsg]');
+      msg.hidden = false; msg.className = 'status-line'; msg.textContent = '저장하는 중...';
+      postFix({ action: 'edit', key: key, cat: cat, title: origTitle, fix: fix }).then(function () {
+        msg.textContent = fix ? '저장했어요. 모두에게 고친 정보가 보여요.' : '원래 정보로 돌렸어요.';
+        if (onSaved) onSaved();
+      }, function () { msg.className = 'status-line err'; msg.textContent = '저장하지 못했어요. 다시 해 주세요.'; });
+    }
+    f.querySelector('[data-ffsave]').addEventListener('click', function () {
+      var fix = {};
+      f.querySelectorAll('[data-ff]').forEach(function (i) { var v = i.value.trim(); if (v) fix[i.getAttribute('data-ff')] = v; });
+      send(fix);
+    });
+    var rs = f.querySelector('[data-ffreset]');
+    if (rs) rs.addEventListener('click', function () { send(null); });
+    return f;
+  }
+  // 상세 화면 맨 아래: 운영자(고치기·지우기) / 게스트(정보 오류 알리기)
+  function setupFixes(sheet, cat, view, closeDetail) {
+    var key = view.fixKey || fixKey(cat, view);
+    if (!key || !state.auth || !state.auth.canView) return;
+    var owner = !!state.auth.canEdit;
+    if (owner && view.pick) return; // 추천 맛집은 맛집 단추(고치기·지우기)를 쓴다
+    var e = fixes.edits[key];
+    var html;
+    if (owner) {
+      html = '<h3>🛠 운영자 관리</h3>' +
+        (e ? '<div class="copy-hint">운영자가 고친 정보가 보이고 있어요' + (e.orig && e.orig !== view.title ? ' (원래 이름: ' + escapeHtml(e.orig) + ')' : '') + '.</div>' : '') +
+        '<div class="chip-row"><button type="button" class="chip" data-fx="edit">✏️ 정보 고치기</button><button type="button" class="chip" data-fx="hide">🗑 지우기 (모두에게 안 보이게)</button></div>' +
+        '<div data-fxbox></div>';
+    } else {
+      html = '<h3>⚠ 정보가 틀렸나요?</h3>' +
+        '<div class="copy-hint">폐업, 바뀐 전화번호·영업시간, 잘못된 위치 등을 알려 주시면 운영자가 확인하고 고칠게요.</div>' +
+        '<div class="chip-row"><button type="button" class="chip" data-fx="report">⚠ 정보 오류 알리기</button></div>' +
+        '<div data-fxbox></div>';
+    }
+    var sec = el('<section class="page-sec fix-sec">' + html + '</section>');
+    var body = sheet.querySelector('.page-body');
+    if (!body) return;
+    body.appendChild(sec);
+    var box = sec.querySelector('[data-fxbox]');
+    sec.addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-fx]'); if (!b) return;
+      var act = b.getAttribute('data-fx');
+      if (act === 'edit') {
+        box.innerHTML = '';
+        box.appendChild(fixForm(key, cat, view.__origTitle || view.title, view.__orig ? view.__orig.place : view.place, function () {
+          setTimeout(function () { closeDetail(); applyFix(cat, view); refreshCardsAfterFix(); openPlaceDetail(cat, view); }, 600);
+        }));
+        return;
+      }
+      if (act === 'hide') {
+        if (b.getAttribute('data-sure') !== '1') { b.setAttribute('data-sure', '1'); b.textContent = '정말 지우기 (한 번 더)'; return; }
+        b.disabled = true;
+        postFix({ action: 'hide', key: key, cat: cat, title: view.__origTitle || view.title }).then(function () {
+          closeDetail(); refreshFixed();
+          showToast('🗑 「' + (view.title || '') + '」을(를) 지웠어요 — 공유·관리 → 정보 오류·지운 항목에서 되살릴 수 있어요', 6000);
+        }, function () { b.disabled = false; b.textContent = '지우지 못했어요. 다시 눌러 보세요'; b.removeAttribute('data-sure'); });
+        return;
+      }
+      if (act === 'report') {
+        box.innerHTML = '<div class="field"><textarea data-rtext rows="3" maxlength="500" placeholder="예: 지난달에 폐업했어요 / 전화번호가 031-000-0000으로 바뀌었어요 / 위치가 길 건너편이에요"></textarea></div>' +
+          '<div class="chip-row"><button type="button" class="chip" data-rsend>보내기</button></div><div class="status-line" data-rmsg hidden></div>';
+        var ta = box.querySelector('[data-rtext]'); ta.focus();
+        box.querySelector('[data-rsend]').addEventListener('click', function () {
+          var t = ta.value.trim(), msg = box.querySelector('[data-rmsg]'), send = box.querySelector('[data-rsend]');
+          msg.hidden = false;
+          if (t.length < 2) { msg.className = 'status-line err'; msg.textContent = '무엇이 틀렸는지 적어 주세요.'; return; }
+          send.disabled = true; msg.className = 'status-line'; msg.textContent = '보내는 중...';
+          postFix({ action: 'report', key: key, cat: cat, title: view.title, text: t, lat: view.lat, lng: view.lng }).then(function () {
+            tele.use('정보 오류 알림');
+            box.innerHTML = '<div class="status-line">고마워요! 운영자가 확인하고 고칠게요. 🙏</div>';
+          }, function (er) { send.disabled = false; msg.className = 'status-line err'; msg.textContent = er && er.status === 429 ? '알림이 너무 많이 쌓였어요. 나중에 다시 보내 주세요.' : '보내지 못했어요. 다시 눌러 주세요.'; });
+        });
+      }
+    });
+  }
+  // 고친 이름을 이미 그려진 카드에도 반영 (다음에 목록을 그릴 때는 자동)
+  function refreshCardsAfterFix() {
+    document.querySelectorAll('[data-fk]').forEach(function (c) {
+      var e = fixes.edits[c.getAttribute('data-fk')];
+      var h = c.querySelector('.card-body h3');
+      if (e && e.title && h) h.textContent = e.title;
+    });
+  }
   // 내 기록(다녀온 곳, 별점, 한 줄 평)
   var marks = {};
   var marksReady = authReady.then(function () { return api('marks'); }).then(function (j) { marks = j.items || {}; }).catch(function (err) {
@@ -3196,6 +3359,8 @@
 
   function placeCard(cat, item) {
     var view = buildPlaceView(cat, item);
+    view.key = itemKey(cat, item);
+    applyFix(cat, view);
     var info = cardInfo(cat, item);
     var card = el(
       '<div class="place-card">' +
@@ -3214,6 +3379,7 @@
     );
     view.key = itemKey(cat, item);
     view.card = card;
+    markFix(card, cat, view);
     view.ph = info.ph;
     view.image = info.image || null;
     view.mine = cat === '내 장소';
@@ -3413,6 +3579,7 @@
   function nameHit(name) { var q = state.mtnQ.replace(/\s+/g, ''); return !q || String(name).replace(/\s+/g, '').indexOf(q) >= 0; }
   // 산 카드 (사진이 없으면 위치 지도). 카드가 화면에 보일 때 그림을 불러온다.
   function mtnCard(cat, view, lines, generic) {
+    applyFix(cat, view);
     var badge = String(view.place || '').split(/\s+/)[0] || '';
     var card = el(
       '<div class="place-card">' +
@@ -3423,7 +3590,7 @@
       '</div>');
     whenVisible(card, function () { return setThumb(card, { url: view.image || null, q: view.title, lat: view.lat, lng: view.lng, wiki: true, addr: view.place, noSearch: !!generic }); });
     card.addEventListener('click', function () { openPlaceDetail(cat, view); });
-    return card;
+    return markFix(card, cat, view);
   }
   // 산 탭 종주 코스 지도 (내 주변 검색 지도와 따로)
   state.mtnOverlays = [];
@@ -4382,6 +4549,8 @@
           var view = buildPlaceView(layer, item);
           if (view.lat == null || view.lng == null) return;
           view.key = itemKey(layer, item);
+          applyFix(layer, view);
+          if (isHiddenKey(view.fixKey)) return;
           var minfo = cardInfo(layer, item);
           view.ph = minfo.ph;
           view.image = minfo.image || null;
@@ -4657,14 +4826,14 @@
   // 내 위치에서 30km 안의 산(100대명산·BAC·명산100+·그 밖의 산) · 휴양림 · 골프장 · 명소 · 문화유산 · 행사 · 맛집을 한 번에 보여준다.
   var NEAR_KM = 30;
   var NEAR_CATS = [['산', '100대명산', '#7a6a2f'], ['BAC', 'BAC 명산100', '#d4a017'], ['BAC+', '명산100+', '#b7791f'], ['봉', '그 밖의 산', '#8d7b5a'], ['휴양림', '휴양림', '#3f7d2c'], ['골프', '골프장', '#4d7c0f'], ['종주', '종주 코스', '#0e7490'], ['명소', '명소', '#2e7d57'],
-    ['문화유산', '문화유산', '#a8552d'], ['행사', '행사', '#7d4fc4'], ['맛집', '맛집', '#d9651c']];
+    ['문화유산', '문화유산', '#a8552d'], ['행사', '행사', '#7d4fc4'], ['맛집', '맛집', '#d9651c'], ['내 장소', '내 장소', '#c73a78']];
   var NEAR_MAX = { 명소: 200, 맛집: 150, 행사: 80, 문화유산: 250 };
   state.nearOn = {};
   NEAR_CATS.forEach(function (c) { state.nearOn[c[0]] = false; });
   state.nearFit = true;
   state.nearLoaded = {};
   // 위쪽 단추 → 내 주변에서 켜고 끄는 종류
-  var CHIP_TAGS = { 숲길: ['산', 'BAC'], 'BAC+': ['BAC+'], 산: ['봉'], 종주: ['종주'], 휴양림: ['휴양림'], 골프장: ['골프'], 명소: ['명소'], 문화유산: ['문화유산'], 행사: ['행사'], 맛집: ['맛집'] };
+  var CHIP_TAGS = { 숲길: ['산', 'BAC'], 'BAC+': ['BAC+'], 산: ['봉'], 종주: ['종주'], 휴양림: ['휴양림'], 골프장: ['골프'], 명소: ['명소'], 문화유산: ['문화유산'], 행사: ['행사'], 맛집: ['맛집'], '내 장소': ['내 장소'] };
   state.nearMarkers = [];
   // 시·도 대략 범위 [남, 서, 북, 동] — 50km 안에 걸치는 시·도의 문화유산만 받는다
   var AREA_BOX = {
@@ -4712,6 +4881,9 @@
   }
   // 장소 하나를 핀으로 (누르면 상세)
   function nearMarker(map, cat, view, tags, color, label, cls) {
+    applyFix(cat, view);
+    if (isHiddenKey(view.fixKey)) return; // 운영자가 지운 항목
+    if (label === view.__origTitle && view.title !== label) label = view.title;
     var opts = { position: new naver.maps.LatLng(view.lat, view.lng), map: map, title: view.title || '' };
     var ic = pinIcon(color, label, false, cls);
     if (ic) opts.icon = ic;
@@ -4726,6 +4898,8 @@
     var view = buildPlaceView(layer, item);
     if (view.lat == null || view.lng == null) return null;
     view.key = itemKey(layer, item);
+    applyFix(layer, view);
+    if (isHiddenKey(view.fixKey)) return null; // 운영자가 지운 항목
     var info = cardInfo(layer, item);
     view.ph = info.ph;
     view.image = info.image || null;
@@ -4934,6 +5108,22 @@
         });
         counts[cat] = n + (cat === '맛집' ? pn : 0);
       });
+    }));
+    // 내 장소 (운영자가 네이버 지도 등에서 가져온 장소)
+    if (want('내 장소')) loaded(['내 장소']);
+    if (want('내 장소')) group('내 장소', loadItems('내 장소').then(function (entry) {
+      if (seq !== state.mapSeq) return;
+      var n = 0;
+      (entry.items || []).forEach(function (it) {
+        var view = placeViewFor('내 장소', it);
+        if (!view || !near(view.lat, view.lng)) return;
+        view.mine = true;
+        view.q = it.category === '주소/위치' ? '' : view.title;
+        nearMarker(map, '내 장소', view, ['내 장소'], LAYER_COLOR['내 장소'], view.title, '');
+        n++;
+      });
+      counts['내 장소'] = n;
+      if (entry.status === 'error') throw new Error('myplaces');
     }));
     // 문화유산 (국가유산청: 걸치는 시·도 × 국보·보물·사적·명승·천연기념물)
     var areas = areasNear(pos.lat, pos.lng, NEAR_KM);
@@ -6420,6 +6610,7 @@
       }, function () { openPlaceDetail(category, view); });
       return;
     }
+    applyFix(category, view);
     var rowsHtml = detailRowsHtml(view.rows);
     var hasMore = !!(view.detailRef || view.detailApi);
     var descParts = (view.descParts || []).filter(function (d) { return d[1]; });
@@ -6769,6 +6960,7 @@
     // ----- 골프장 코스 보기
     if (view.golf && hasCoord) setupGolf(sheet, category, view, useSrc);
     if (view.pick) setupPick(sheet, view, close);
+    setTimeout(function () { if (sheet.isConnected) setupFixes(sheet, category, view, close); }, 0);
 
     // ----- 날씨
     if (hasCoord) {
@@ -7735,7 +7927,7 @@
   // 추천 맛집과 같은 가게(이름이 같고 300m 안)면 주변 맛집 목록에서 한 번만 보이게
   function pickNameKey(s) { return String(s || '').replace(/\(.*?\)|\[.*?\]/g, '').replace(/본점|[\s·.,&-]/g, '').toLowerCase(); }
   function isPickDup(it, picks) {
-    var la = Number(it.mapY), lo = Number(it.mapX), k = pickNameKey(it.title);
+    var la = Number(it.mapY), lo = Number(it.mapX), k = pickNameKey(it.name || it.title);
     if (!la || !lo || k.length < 2) return false;
     return (picks || []).some(function (p) {
       if (p.lat == null) return false;
@@ -8433,6 +8625,13 @@
       paintAdminBadge();
       if (state.pickPending && state.pickPending > before) showToast('🍜 게스트가 등록한 맛집 ' + state.pickPending + '곳이 확인을 기다려요 — 맛집 탭 → ⏳ 확인 대기', 6000);
     }).catch(function () {});
+    fetch('/api/fixes?count=1', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (!j || !j.ok) return;
+      var before = state.fixNew || 0;
+      state.fixNew = j.unread || 0;
+      paintAdminBadge();
+      if (state.fixNew && state.fixNew > before) showToast('📝 게스트가 알려 준 정보 오류 ' + state.fixNew + '건 — 공유·관리 → 정보 오류·지운 항목', 6000);
+    }).catch(function () {});
     fetch('/api/glog?count=1', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
       if (!j || !j.ok) return;
       var before = state.gUnread || 0;
@@ -8447,7 +8646,88 @@
     var btn = $('admin-btn');
     if (!btn || !state.auth || !state.auth.canEdit || !state.auth.configured) return;
     btn.innerHTML = '공유·관리' + (state.gUnread ? ' <span class="err-badge" title="게스트 기기에서 생긴 새 오류">⚠ ' + state.gUnread + '</span>' : '') +
-      (state.pickPending ? ' <span class="err-badge pk-badge" title="확인을 기다리는 게스트 맛집">🍜 ' + state.pickPending + '</span>' : '');
+      (state.pickPending ? ' <span class="err-badge pk-badge" title="확인을 기다리는 게스트 맛집">🍜 ' + state.pickPending + '</span>' : '') +
+      (state.fixNew ? ' <span class="err-badge pk-badge" title="게스트가 알려 준 정보 오류">📝 ' + state.fixNew + '</span>' : '');
+  }
+  // ----- 공유·관리 → 📝 정보 오류·지운 항목
+  function openFixAdmin(host) {
+    var box = el('<div class="fix-admin">' +
+      '<h3>📝 게스트가 알려 준 정보 오류</h3><div class="copy-hint">게스트가 항목 상세 화면 맨 아래 「⚠ 정보 오류 알리기」로 보낸 내용이에요. <b>✏️ 고치기</b>로 바로 고치고 <b>✅ 처리 완료</b>를 누르세요. 없어진 곳은 <b>🗑 항목 지우기</b>로 모두에게 안 보이게 할 수 있어요.</div>' +
+      '<div data-fr><div class="status-line">불러오는 중...</div></div>' +
+      '<h3 style="margin-top:18px">✏️ 고친 항목</h3><div data-fe></div>' +
+      '<h3 style="margin-top:18px">🗑 지운 항목</h3><div class="copy-hint">지운 항목은 모든 탭과 지도에서 보이지 않아요. <b>되살리기</b>를 누르면 다시 보여요.</div><div data-fh></div>' +
+      '</div>');
+    host.appendChild(box);
+    var fr = box.querySelector('[data-fr]'), fe = box.querySelector('[data-fe]'), fh = box.querySelector('[data-fh]');
+    var ST = { 'new': '🆕 새 알림', done: '✅ 처리 완료', dismiss: '무시함' };
+    function when(t) { var d = new Date(t); return isNaN(d) ? '' : (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+    function mapLink(r) { return r.lat != null && r.lng != null ? ' · <a href="https://map.kakao.com/link/map/' + encodeURIComponent(r.title || '위치') + ',' + r.lat + ',' + r.lng + '" target="_blank" rel="noopener">지도</a>' : ''; }
+    function paintEdits() {
+      var ks = Object.keys(fixes.edits);
+      fe.innerHTML = ks.length ? '' : '<div class="copy-hint">아직 고친 항목이 없어요.</div>';
+      ks.forEach(function (k) {
+        var e = fixes.edits[k];
+        var row = el('<div class="fix-row"><div><b>' + escapeHtml(e.title || e.orig || k) + '</b>' + (e.title && e.orig && e.title !== e.orig ? ' <small>(원래: ' + escapeHtml(e.orig) + ')</small>' : '') + ' <small>' + escapeHtml(e.cat || '') + '</small>' +
+          '<small>' + escapeHtml([e.addr && '주소 ' + e.addr, e.tel && '전화 ' + e.tel, e.hours && '시간 ' + e.hours, e.note && '안내 ' + e.note].filter(Boolean).join(' · ')) + '</small></div>' +
+          '<div class="chip-row"><button type="button" class="chip" data-x="edit">✏️ 고치기</button><button type="button" class="chip" data-x="reset">↩ 원래대로</button></div><div data-xbox></div></div>');
+        row.addEventListener('click', function (ev) {
+          var b = ev.target.closest('[data-x]'); if (!b) return;
+          if (b.getAttribute('data-x') === 'edit') { var xb = row.querySelector('[data-xbox]'); xb.innerHTML = ''; xb.appendChild(fixForm(k, e.cat, e.orig, '', function () { setTimeout(paintAll, 700); })); return; }
+          b.disabled = true;
+          postFix({ action: 'edit', key: k, cat: e.cat, title: e.orig, fix: null }).then(paintAll, function () { b.disabled = false; });
+        });
+        fe.appendChild(row);
+      });
+    }
+    function paintHidden() {
+      var ks = Object.keys(fixes.hidden);
+      fh.innerHTML = ks.length ? '' : '<div class="copy-hint">지운 항목이 없어요.</div>';
+      ks.sort(function (a, b) { return String((fixes.hidden[b] || {}).at).localeCompare(String((fixes.hidden[a] || {}).at)); }).forEach(function (k) {
+        var h = fixes.hidden[k] || {};
+        var row = el('<div class="fix-row"><div><b>' + escapeHtml(h.title || k) + '</b> <small>' + escapeHtml(h.cat || '') + (h.at ? ' · ' + when(h.at) + ' 지움' : '') + '</small></div>' +
+          '<div class="chip-row"><button type="button" class="chip" data-un>↩ 되살리기</button></div></div>');
+        row.querySelector('[data-un]').addEventListener('click', function (ev) {
+          ev.target.disabled = true;
+          postFix({ action: 'unhide', key: k }).then(function () { paintHidden(); refreshFixed(); }, function () { ev.target.disabled = false; });
+        });
+        fh.appendChild(row);
+      });
+    }
+    function paintReports() {
+      api('fixes?reports=1').then(function (j) {
+        var items = j.items || [];
+        state.fixNew = items.filter(function (r) { return r.status === 'new'; }).length;
+        paintAdminBadge();
+        fr.innerHTML = items.length ? '' : '<div class="copy-hint">아직 받은 정보 오류가 없어요.</div>';
+        items.forEach(function (r) {
+          var row = el('<div class="fix-row' + (r.status === 'new' ? ' new' : '') + '"><div><b>' + escapeHtml(r.title || '(이름 없음)') + '</b> <small>' + escapeHtml(r.cat || '') + '</small>' +
+            '<div class="fix-text">' + escapeHtml(r.text) + '</div>' +
+            '<small>' + escapeHtml(r.by + (r.realName ? ' (' + r.realName + ')' : '')) + ' · ' + when(r.at) + ' · ' + (ST[r.status] || r.status) + mapLink(r) +
+            (fixes.edits[r.key] ? ' · ✏️ 고침' : '') + (fixes.hidden[r.key] ? ' · 🗑 지움' : '') + '</small></div>' +
+            '<div class="chip-row"><button type="button" class="chip" data-x="edit">✏️ 고치기</button>' +
+            (fixes.hidden[r.key] ? '' : '<button type="button" class="chip" data-x="hide">🗑 항목 지우기</button>') +
+            (r.status !== 'done' ? '<button type="button" class="chip" data-x="done">✅ 처리 완료</button>' : '') +
+            (r.status === 'new' ? '<button type="button" class="chip" data-x="dismiss">무시</button>' : '') +
+            '<button type="button" class="chip" data-x="del">알림 지우기</button></div><div data-xbox></div></div>');
+          row.addEventListener('click', function (ev) {
+            var b = ev.target.closest('[data-x]'); if (!b) return;
+            var x = b.getAttribute('data-x');
+            if (x === 'edit') { var xb = row.querySelector('[data-xbox]'); xb.innerHTML = ''; xb.appendChild(fixForm(r.key, r.cat, r.title, '', function () { paintEdits(); refreshCardsAfterFix(); })); return; }
+            if ((x === 'hide' || x === 'del') && b.getAttribute('data-sure') !== '1') { b.setAttribute('data-sure', '1'); b.textContent = '한 번 더 누르세요'; return; }
+            b.disabled = true;
+            var p = x === 'hide' ? postFix({ action: 'hide', key: r.key, cat: r.cat, title: r.title }).then(function () { refreshFixed(); paintHidden(); return postFix({ action: 'rstatus', id: r.id, status: 'done' }); })
+              : x === 'del' ? postFix({ action: 'rdel', id: r.id })
+              : postFix({ action: 'rstatus', id: r.id, status: x });
+            p.then(paintReports, function () { b.disabled = false; });
+          });
+          fr.appendChild(row);
+        });
+      }).catch(function () { fr.innerHTML = '<div class="status-line err">불러오지 못했어요.</div>'; });
+    }
+    function paintAll() {
+      api('fixes').then(function (j) { fixes.hidden = j.hidden || {}; fixes.edits = j.edits || {}; paintEdits(); paintHidden(); }).catch(function () { paintEdits(); paintHidden(); });
+    }
+    paintReports(); paintAll();
   }
   function openGuestAdmin(host) {
     var sheet = el('<div class="sheet-backdrop full"><div class="sheet page" role="dialog" aria-modal="true">' +
@@ -8606,6 +8886,7 @@
         '<div class="admin-split">' +
           '<nav class="admin-nav" aria-label="관리 메뉴">' +
             '<button type="button" data-anav="guests">👥 게스트 관리' + (state.gUnread ? ' <span class="err-badge">⚠ ' + state.gUnread + '</span>' : '') + '</button>' +
+            '<button type="button" data-anav="fixes">📝 정보 오류·지운 항목' + (state.fixNew ? ' <span class="err-badge">' + state.fixNew + '</span>' : '') + '</button>' +
             '<button type="button" data-anav="share">🔒 공개 범위</button>' +
             '<button type="button" data-anav="prefs">⚙️ 내 메뉴 설정</button>' +
             '<div class="admin-note admin-nav-note"><b>아이패드·휴대폰에서 고치려면</b> — 그 기기에서 이 사이트를 열고 <b>운영자 로그인</b>에 편집 암호를 넣으면 돼요.</div>' +
@@ -8618,6 +8899,7 @@
         pane.innerHTML = '';
         if (k === 'share') openShareSettings(pane);
         else if (k === 'prefs') openPrefs(false, pane);
+        else if (k === 'fixes') openFixAdmin(pane);
         else openGuestAdmin(pane);
         pane.scrollTop = 0;
       }
