@@ -3526,7 +3526,7 @@ function cleanHike(input) {
 var store6 = () => getStore({ name: "gstories", consistency: "strong" });
 var gphotos = () => getStore({ name: "gphotos", consistency: "strong" });
 var PHOTO_RE2 = /^[0-9a-f-]{36}\.(jpg|png|webp)$/;
-var MAX_PHOTOS = 5;
+var MAX_PHOTOS = 10;
 var STATUSES = ["ok", "pending", "hidden"];
 var str4 = (v, max) => typeof v === "string" ? v.replace(/\s+$/g, "").trim().slice(0, max) : "";
 var num4 = (v) => typeof v === "number" && Number.isFinite(v) ? v : null;
@@ -4075,8 +4075,13 @@ var mtnpaths_default = async (req, _context) => {
     let sample = null;
     for (let page = 1; page <= 4 && lines.length < MAX_LINES; page++) {
       const url = `${API}?service=data&request=GetFeature&data=LT_L_FRSTCLIMB&format=json&geometry=true&attribute=true&crs=EPSG:4326&size=1000&page=${page}&geomFilter=BOX(${box.join(",")})&key=${encodeURIComponent(key)}&domain=${encodeURIComponent(DOMAIN)}`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(12e3), headers: { Referer: `https://${DOMAIN}/` } });
-      const text2 = await res.text();
+      let res, text2 = "";
+      for (let tryNo = 0; ; tryNo++) {
+        res = await fetch(url, { signal: AbortSignal.timeout(12e3), headers: { Referer: `https://${DOMAIN}/` } });
+        text2 = await res.text();
+        if (tryNo >= 1 || res.status < 500 && text2.trim().startsWith("{")) break;
+        await new Promise((r2) => setTimeout(r2, 600));
+      }
       let data;
       try {
         data = JSON.parse(text2);

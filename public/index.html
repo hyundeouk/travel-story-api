@@ -1152,12 +1152,13 @@
   async function api(path, opts) {
     var res;
     try { res = await fetch('/api/' + path, opts); }
-    catch (ne) { if (navigator.onLine !== false) tele.err('서버에 연결하지 못함', '/api/' + String(path).split('?')[0]); throw ne; }
+    catch (ne) { if (navigator.onLine !== false && !(opts && opts.quiet)) tele.err('서버에 연결하지 못함', '/api/' + String(path).split('?')[0]); throw ne; }
     if (!res.ok) {
       var e = new Error('http ' + res.status);
       e.status = res.status;
       try { e.body = await res.json(); } catch (_) { e.body = null; }
-      if (res.status >= 500 && !(res.status === 502 && e.body && Array.isArray(e.body.relayNeed) && e.body.relayNeed.length)) {
+      // quiet: 실패해도 화면이 다른 방법으로 해결하는 요청 (예: 등산로를 브라우저에서 직접 불러오기) → 오류로 알리지 않는다
+      if (res.status >= 500 && !(opts && opts.quiet) && !(res.status === 502 && e.body && Array.isArray(e.body.relayNeed) && e.body.relayNeed.length)) {
         tele.err('서버 오류 ' + res.status + (e.body && e.body.error ? ' (' + String(e.body.error).slice(0, 80) + ')' : ''), '/api/' + String(path).split('?')[0]);
       }
       if (res.status === 502 && e.body && Array.isArray(e.body.relayNeed) && e.body.relayNeed.length && !(opts && opts.method && opts.method !== 'GET')) {
@@ -1757,6 +1758,8 @@
         return { course: wrap.querySelector('[data-sc-course]').value.trim(), courseKey: init.courseKey || null, front: names[0].trim(), back: n === 18 ? names[1].trim() : '',
           holes: list.map(function (h) { return { par: h.par, strokes: h.strokes, putts: h.putts }; }), total: t.total, par: t.par, putts: t.putts, played: t.n, review: review };
       },
+      // 아직 타수를 안 넣었어도 지금 적힌 골프장 이름
+      info: function () { return { course: wrap.querySelector('[data-sc-course]').value.trim(), courseKey: init.courseKey || null }; },
     };
   }
   // ================= 산행 기록 (등산 장소에서 쓰는 글에 붙임) =================
@@ -1898,7 +1901,7 @@
     var g = showG ? scorecardSlot(slot.querySelector('[data-golfslot]'), existing.golf || prefill.golf, prefill.parGroups) : { get: function () { return null; } };
     var h = showH ? hikeSlot(slot.querySelector('[data-hikeslot]'), existing.hike || prefill.hike) : { get: function () { return null; } };
     if (!showG && !showH) slot.hidden = true;
-    return { golf: g.get, hike: h.get };
+    return { golf: g.get, hike: h.get, golfInfo: g.info || function () { return null; } };
   }
   // 폼 안의 "골프 스코어" 칸: 처음부터 있거나(골프장에서 연 경우·이미 기록이 있는 경우) 단추로 붙인다
   function scorecardSlot(slot, init, groups) {
@@ -1913,7 +1916,7 @@
       slot.querySelector('[data-sc-add]').addEventListener('click', function () { open(init && init.holes ? init : { course: (init && init.course) || '', courseKey: init && init.courseKey }); });
     }
     if (init && (init.holes || init.open)) open(init); else closed();
-    return { get: function () { return sc ? sc.get() : null; } };
+    return { get: function () { return sc ? sc.get() : null; }, info: function () { return sc ? sc.info() : null; } };
   }
   // 읽기 전용 스코어카드
   function scorecardView(g) {
@@ -5762,6 +5765,22 @@
     if (window.naver && naver.maps.MapTypeId && map.setMapTypeId) map.setMapTypeId(on ? naver.maps.MapTypeId.HYBRID : naver.maps.MapTypeId.NORMAL);
   }
   function golfCore(name) { return String(name || '').replace(/\(.*?\)|골프클럽|골프장|컨트리클럽|골프앤리조트|골프&리조트|리조트|\s+|CC|GC|C\.C/gi, ''); }
+  // 골프장 이름(또는 번호·주소)으로 시·도("경기" 등)를 찾는다. 못 찾으면 ''
+  function golfSido(key, name, addr) {
+    var a = addr ? sidoOf(addr) : '';
+    if (a && SIDO_NAMES.indexOf(a) >= 0) return Promise.resolve(a);
+    var core = golfCore(name).toLowerCase(), id = key ? String(key).replace(/^g:/, '') : '';
+    if (!core && !id) return Promise.resolve('');
+    return loadItems('골프장').then(function (entry) {
+      var items = (entry && entry.items) || [];
+      var cc = function (it) { return golfCore(it.name).toLowerCase(); };
+      var hit = core ? items.filter(function (it) { return cc(it) === core; })[0] : null;
+      if (!hit && id) hit = items.filter(function (it) { return it.id === id; })[0];
+      if (!hit && core.length >= 2) hit = items.filter(function (it) { var c = cc(it); return c.length >= 2 && (c.indexOf(core) >= 0 || core.indexOf(c) >= 0); })[0];
+      var sd = hit ? (hit.sido || sidoOf(hit.address)) : '';
+      return SIDO_NAMES.indexOf(sd) >= 0 ? sd : '';
+    }).catch(function () { return ''; });
+  }
   function setupGolf(sheet, category, view, useSrc) {
     // 코스 지도 그림 (넣기·바꾸기는 주인만, 보기는 손님도)
     var courseBox = sheet.querySelector('[data-coursebox]');
@@ -5792,7 +5811,7 @@
     var canStory = shareTab(guestShare(), 'gstory');
     function roundPrefill() {
       var o = golfOsmCache[view.key];
-      return { kind: 'golf', title: view.title + ' 라운드', place: view.title, lat: view.lat, lng: view.lng, category: '골프',
+      return { kind: 'golf', title: view.title + ' 라운드', place: view.title, addr: view.place || '', lat: view.lat, lng: view.lng, category: '골프',
         golf: { course: view.title, courseKey: view.key || null, open: true }, parGroups: parGroups(o) };
     }
     function closeDetail() { var c = sheet.querySelector('[data-close]'); if (c) c.click(); }
@@ -6823,7 +6842,7 @@
           note.textContent = text;
           note.style.color = err ? 'var(--danger)' : '';
         }
-        api('mtnpaths?name=' + encodeURIComponent(view.trailName || view.title || '') + '&' + qs)
+        api('mtnpaths?name=' + encodeURIComponent(view.trailName || view.title || '') + '&' + qs, { quiet: true })
           .then(function (j) { return j && j.configured === false ? j : (j && j.lines ? j : Promise.reject(j)); })
           .catch(function (why) {
             // 서버에서 브이월드에 닿지 못하면 이 브라우저에서 직접 불러 본다
@@ -7187,7 +7206,7 @@
     var gBtn = sheet.querySelector('[data-addgstory]');
     if (gBtn) gBtn.addEventListener('click', function () {
       close();
-      openGStoryForm({ onClose: backToPlace, kind: recKind, hike: hikePrefill(), golf: golfPrefill(), title: view.title, place: view.title + (view.place ? ' (' + String(view.place).split(/\s+/).slice(0, 2).join(' ') + ')' : ''), lat: view.lat, lng: view.lng });
+      openGStoryForm({ onClose: backToPlace, kind: recKind, hike: hikePrefill(), golf: golfPrefill(), addr: view.place || '', title: view.title, place: view.title + (view.place ? ' (' + String(view.place).split(/\s+/).slice(0, 2).join(' ') + ')' : ''), lat: view.lat, lng: view.lng });
     });
   }
 
@@ -7338,7 +7357,7 @@
     var cur = existing || {};
     var today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
     var photos = (cur.photoIds || []).map(function (id) { return { id: id, url: gPhotoUrl(id) }; });
-    var MAXP = 5;
+    var MAXP = 10;
     var sheet = el(
       '<div class="sheet-backdrop">' +
         '<div class="sheet">' +
@@ -7347,7 +7366,7 @@
             '<div class="field"><label for="g-nick">이름(닉네임)</label><input id="g-nick" maxlength="20" placeholder="다른 사람에게 보일 이름"' + (state.auth.guest ? ' readonly' : '') + ' value="' + escapeHtml(state.auth.guest ? state.auth.guest.nickname : (cur.nickname || savedNick() || '주인')) + '"></div>' +
             '<div class="field"><label for="g-title">제목</label><input id="g-title" maxlength="100" value="' + escapeHtml(cur.title || prefill.title || '') + '"></div>' +
             '<div class="field"><label for="g-date">다녀온 날</label><input type="date" id="g-date" value="' + escapeHtml(cur.date || today) + '"></div>' +
-            '<div class="field"><label for="g-region">지역</label><select id="g-region"><option value="">선택 안 함</option>' + SIDO_NAMES.map(function (r) { return '<option' + ((cur.region || '') === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select></div>' +
+            '<div class="field"><label for="g-region">지역</label><select id="g-region"><option value="">선택 안 함</option>' + SIDO_NAMES.map(function (r) { return '<option' + ((cur.region || '') === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select><div class="copy-hint" data-regauto hidden style="margin-top:0"></div></div>' +
             '<div class="field"><label for="g-place">장소</label><input id="g-place" maxlength="100" placeholder="예: 설악산 대청봉" value="' + escapeHtml(cur.place || prefill.place || '') + '"></div>' +
             '<div class="field"><label for="g-memo">이야기</label><textarea id="g-memo" maxlength="5000" rows="6" placeholder="' + (prefill.kind === 'place' ? '이곳에서의 내 경험을 적어 주세요 (분위기, 좋았던 점, 아쉬운 점, 다시 가고 싶은지 등)' : '어땠는지 자유롭게 적어 주세요') + '">' + escapeHtml(cur.memo || '') + '</textarea></div>' +
             '<div class="field sc-slot" data-scslot></div>' +
@@ -7368,6 +7387,32 @@
     var err = sheet.querySelector('[data-gferr]');
     var gRecs = recordSlots(sheet.querySelector('[data-scslot]'), prefill, cur);
     var gSc = { get: gRecs.golf };
+    // 골프 스코어가 붙어 있으면 지역은 고르지 않고 그 골프장 위치(시·도)로 자동으로 정한다
+    var regSel = sheet.querySelector('#g-region'), regAuto = sheet.querySelector('[data-regauto]'), regSeq = 0, regTimer = 0, regAutoSet = false;
+    function syncRegion() {
+      var g = gRecs.golfInfo();
+      if (!g) { regSel.hidden = false; regAuto.hidden = true; return; }
+      var seq = ++regSeq;
+      var sameAsPrefill = !!(prefill.golf && golfCore(prefill.golf.course) === golfCore(g.course));
+      var keyOk = sameAsPrefill || !!(cur.golf && golfCore(cur.golf.course) === golfCore(g.course)); // 이름을 다른 골프장으로 바꾸면 처음 번호는 쓰지 않는다
+      golfSido(keyOk ? g.courseKey : '', g.course, sameAsPrefill ? prefill.addr : '').then(function (sd) {
+        if (seq !== regSeq) return;
+        regAuto.hidden = false;
+        if (sd) {
+          regSel.value = sd; regSel.hidden = true; regAutoSet = true;
+          regAuto.innerHTML = '📍 <b>' + escapeHtml(sd) + '</b> — 골프장 위치에서 자동으로 정해져요';
+        } else {
+          regSel.hidden = false;
+          if (regAutoSet) { regSel.value = ''; regAutoSet = false; }
+          regAuto.textContent = g.course ? '골프장 목록에서 "' + g.course + '"을(를) 찾지 못했어요. 지역을 직접 골라 주세요.' : '스코어의 골프장 이름을 넣으면 지역이 자동으로 정해져요.';
+        }
+      });
+    }
+    var scSlot = sheet.querySelector('[data-scslot]');
+    scSlot.addEventListener('click', function () { setTimeout(syncRegion, 0); }); // 스코어 붙이기·빼기
+    scSlot.addEventListener('change', syncRegion);
+    scSlot.addEventListener('input', function (e) { if (e.target && e.target.hasAttribute('data-sc-course')) { clearTimeout(regTimer); regTimer = setTimeout(syncRegion, 500); } });
+    syncRegion();
     function paintPick() {
       pick.innerHTML = photos.map(function (p, i) { return '<span class="gs-thumb"><img alt="" src="' + escapeHtml(p.url) + '"><button type="button" data-rm="' + i + '" aria-label="빼기">✕</button></span>'; }).join('');
       pick.querySelectorAll('[data-rm]').forEach(function (b) { b.addEventListener('click', function () { photos.splice(Number(b.getAttribute('data-rm')), 1); paintPick(); }); });
@@ -7648,7 +7693,7 @@
               box('tabs.golf', '골프', '전국 골프장 목록과 코스 정보 (지도의 "골프장" 단추 포함)', shareTab(cur, 'golf')) +
               box('tabs.weather', '날씨', '날씨 탭 (보는 사람의 위치 기준)', shareTab(cur, 'weather')) +
               box('tabs.browse', '둘러보기', '명소·맛집·문화유산 등 공공 자료 목록', shareTab(cur, 'browse')) +
-              box('tabs.gstory', '스토리', '손님도 글과 사진(글 하나에 5장까지)을 올릴 수 있는 탭', shareTab(cur, 'gstory')) +
+              box('tabs.gstory', '스토리', '손님도 글과 사진(글 하나에 10장까지)을 올릴 수 있는 탭', shareTab(cur, 'gstory')) +
               '<p class="copy-hint">내 여행 기록·내 장소는 나만 보는 화면이라 손님에게는 보이지 않아요.</p>' +
               '<h3>스토리 탭</h3>' +
               box('guestApproval', '손님 글은 내가 확인한 뒤 공개', '켜면 손님이 쓴 글이 "확인 대기"로 들어와요. 손님 글은 쓴 손님 본인과 나만 볼 수 있고, 다른 손님에게는 보이지 않아요(나는 언제든 숨기거나 지울 수 있어요).', !!cur.guestApproval) +

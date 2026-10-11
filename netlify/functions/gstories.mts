@@ -16,7 +16,7 @@ import { cleanHike } from '../../src/lib/hikerec.mts';
 const store = () => getStore({ name: 'gstories', consistency: 'strong' });
 const gphotos = () => getStore({ name: 'gphotos', consistency: 'strong' });
 const PHOTO_RE = /^[0-9a-f-]{36}\.(jpg|png|webp)$/;
-const MAX_PHOTOS = 5;
+const MAX_PHOTOS = 10;
 const STATUSES = ['ok', 'pending', 'hidden'];
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/\s+$/g, '').trim().slice(0, max) : '');

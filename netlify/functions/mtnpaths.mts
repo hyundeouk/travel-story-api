@@ -55,8 +55,14 @@ export default async (req: Request, _context: Context) => {
     for (let page = 1; page <= 4 && lines.length < MAX_LINES; page++) {
       const url = `${API}?service=data&request=GetFeature&data=LT_L_FRSTCLIMB&format=json&geometry=true&attribute=true&crs=EPSG:4326&size=1000&page=${page}` +
         `&geomFilter=BOX(${box.join(',')})&key=${encodeURIComponent(key)}&domain=${encodeURIComponent(DOMAIN)}`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(12000), headers: { Referer: `https://${DOMAIN}/` } });
-      const text = await res.text();
+      // 브이월드가 가끔 520 같은 일시 오류를 주면 한 번 더 시도한다 (그래도 안 되면 화면이 브라우저에서 직접 불러온다)
+      let res: Response, text = '';
+      for (let tryNo = 0; ; tryNo++) {
+        res = await fetch(url, { signal: AbortSignal.timeout(12000), headers: { Referer: `https://${DOMAIN}/` } });
+        text = await res.text();
+        if (tryNo >= 1 || (res.status < 500 && text.trim().startsWith('{'))) break;
+        await new Promise((r) => setTimeout(r, 600));
+      }
       let data: any;
       try { data = JSON.parse(text); } catch { throw new Error(`vworld not json (${res.status}) ${text.slice(0, 160)}`); }
       const r = data?.response || {};
