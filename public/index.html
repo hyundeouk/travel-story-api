@@ -511,7 +511,7 @@
   .pk-yt { margin: 4px 0 12px; } .pk-yt summary { cursor: pointer; font-weight: 700; font-size: 0.9rem; margin-bottom: 8px; }
   .fix-sec .chip-row { margin-top: 6px; }
   .fix-sec .field textarea, .fix-sec textarea, .fix-form .field textarea, .fix-form .field input { font-family: var(--font-body); font-size: 1rem; line-height: 1.5; color: var(--ink); }
-  body.kb-open .sheet-backdrop.full .page-body, body.kb-open .sheet-backdrop .sheet { padding-bottom: calc(var(--kb, 0px) + 40px); }
+  body.kb-open .sheet-backdrop.full .page-body, body.kb-open .sheet-backdrop .sheet { padding-bottom: max(calc(var(--kb, 0px) + 40px), 60vh); }
   .pd-info-btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .pd-info-btns .link-btn { margin: 0; }
   .link-btn.fx-red, .chip.fx-red { background: #c62828; border-color: #c62828; color: #fff; }
@@ -1270,18 +1270,33 @@
   (function () {
     var vv = window.visualViewport;
     function focused() { var a = document.activeElement; return a && /^(TEXTAREA|INPUT|SELECT)$/.test(a.tagName) && a.closest('.sheet') ? a : null; }
+    // 입력칸 윗부분이 보이는 화면 위쪽(제목 아래)에 오도록 그 시트의 스크롤을 옮긴다
+    function place(a) {
+      if (!a || !a.isConnected) return;
+      var sc = a.closest('.page-body') || a.closest('.sheet');
+      if (!sc) return;
+      var top = vv ? vv.offsetTop : 0, hgt = vv ? vv.height : window.innerHeight;
+      var head = a.closest('.sheet') && a.closest('.sheet').querySelector('.page-head, .sheet-head');
+      var headBottom = head ? Math.max(top, head.getBoundingClientRect().bottom) : top;
+      var want = headBottom + Math.min(90, Math.max(20, hgt * 0.12));
+      var r = a.getBoundingClientRect();
+      sc.scrollTop += r.top - want;
+    }
     function reveal(a) {
       if (!a) return;
-      setTimeout(function () { try { a.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) { a.scrollIntoView(); } }, 60);
+      [80, 350, 700].forEach(function (ms) { setTimeout(function () { if (document.activeElement === a) place(a); }, ms); });
     }
+    var kbWas = false;
     function upd() {
       if (!vv) return;
-      var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      var kb = Math.max(0, Math.round(window.innerHeight - vv.height));
       document.documentElement.style.setProperty('--kb', kb + 'px');
-      var open = kb > 80;
-      var was = document.body.classList.contains('kb-open');
-      document.body.classList.toggle('kb-open', open);
-      if (open && !was) reveal(focused());
+      var kbOpen = kb > 80;
+      var f = focused();
+      // 입력 중에는 여백을 유지한다 (아이폰은 자판이 열리면 화면 자체를 밀어 올려 높이 계산이 흔들린다)
+      document.body.classList.toggle('kb-open', kbOpen || !!(f && matchMedia('(pointer: coarse)').matches));
+      if (kbOpen && !kbWas) reveal(f);
+      kbWas = kbOpen;
     }
     if (vv) { vv.addEventListener('resize', upd); vv.addEventListener('scroll', upd); }
     // 자판이 이미 열려 있거나 visualViewport 가 없는 브라우저(일부 앱 안 브라우저)도 입력칸으로 옮긴다
@@ -1290,7 +1305,7 @@
       if (!t || !/^(TEXTAREA|INPUT)$/.test(t.tagName) || !t.closest('.sheet') || !matchMedia('(pointer: coarse)').matches) return;
       document.body.classList.add('kb-open');
       if (!vv) document.documentElement.style.setProperty('--kb', Math.round(window.innerHeight * 0.45) + 'px');
-      setTimeout(function () { reveal(t); }, 350);
+      reveal(t);
     });
     document.addEventListener('focusout', function () { setTimeout(function () { if (!focused()) { if (!vv || Math.round(window.innerHeight - vv.height) < 80) document.body.classList.remove('kb-open'); } }, 200); });
   })();
@@ -1369,6 +1384,8 @@
     }
     function stackOf(x) { try { return String(x && x.stack || '').split('\n').slice(0, 3).join(' ').replace(/\s+/g, ' ').slice(0, 220); } catch (e) { return ''; } }
     window.addEventListener('error', function (e) {
+      // 다른 사이트에서 불러온 스크립트(지도·날씨 등)의 오류는 브라우저가 내용을 감춰 "Script error." 만 남는다 → 고칠 수 없으니 알리지 않는다
+      if (/^Script error\.?$/i.test(String(e.message || '')) && !e.filename) return;
       var f = e.filename ? String(e.filename).replace(location.origin, '') : '';
       err(e.message || '알 수 없는 오류', (f ? f + (e.lineno ? ':' + e.lineno + ':' + (e.colno || 0) : '') : '') + (e.error ? ' | ' + stackOf(e.error) : ''));
     });
@@ -1579,7 +1596,7 @@
         state.stories = json.items || [];
         state.storiesStatus = 'ready';
       } catch (err) {
-        console.error('[stories] load failed', err);
+        if (!err || err.status !== 401) console.error('[stories] load failed', err); // 로그인 전(게스트 입장 화면)에는 401 이 정상
         state.storiesStatus = 'error';
       }
       renderStories();
@@ -3200,7 +3217,7 @@
   }
   var custom = {};
   var customReady = authReady.then(function () { return api('customimages'); }).then(function (j) { custom = j.items || {}; }).catch(function (err) {
-    console.error('[custom images] load failed', err);
+    if (!err || err.status !== 401) console.error('[custom images] load failed', err); // 로그인 전(게스트 입장 화면)에는 401 이 정상
   });
   // ===== 운영자: 항목 지우기(모두에게 숨기기) · 정보 고치기 / 게스트: 정보 오류 알리기 =====
   // 원래 자료(공공데이터 등)는 그대로 두고, 앱에서 보여 줄 때만 숨기거나 고친 내용을 덮어 쓴다.
@@ -3320,7 +3337,11 @@
       if (!holder) { holder = el('<div></div>'); info.appendChild(holder); }
       holder.classList.add('pd-info-btns');
       var quick = el('<button type="button" class="link-btn fx-red" data-fxquick>' + (owner ? '✏️ 정보 고치기' : '⚠ 정보 수정 요청') + '</button>');
-      holder.appendChild(quick);
+      // 운영자: 사진 아래 '내 사진 등록' 옆 / 게스트: 기본 정보 아래 '전화번호 복사' 옆
+      var ph = owner && sheet.querySelector('[data-setphoto]');
+      if (ph) ph.insertAdjacentElement('afterend', quick);
+      else holder.appendChild(quick);
+      if (!holder.children.length) holder.remove();
       quick.addEventListener('click', function () {
         var target = sec.querySelector(owner ? '[data-fx="edit"]' : '[data-fx="report"]');
         if (target) target.click();
@@ -3374,7 +3395,7 @@
   // 내 기록(다녀온 곳, 별점, 한 줄 평)
   var marks = {};
   var marksReady = authReady.then(function () { return api('marks'); }).then(function (j) { marks = j.items || {}; }).catch(function (err) {
-    console.error('[marks] load failed', err);
+    if (!err || err.status !== 401) console.error('[marks] load failed', err); // 로그인 전(게스트 입장 화면)에는 401 이 정상
   });
   function customUrl(key) {
     var c = key && custom[key];
@@ -3815,7 +3836,7 @@
       if (!out.length) list.innerHTML = '<div class="empty-state"><strong>찾는 산이 없어요</strong>지역·이름을 바꿔 보세요.</div>';
       status.textContent = note + ' · 누르면 상세(산림청 산 정보·산행 기록)가 열려요';
     } catch (err) {
-      console.error('[mtn] load failed', err);
+      if (!err || err.status !== 401) console.error('[mtn] load failed', err); // 로그인 전(게스트 입장 화면)에는 401 이 정상
       if (my !== mtnSeq) return;
       list.innerHTML = '';
       status.className = 'status-line err';
@@ -5837,27 +5858,71 @@
 
   // ================= 내 위치 =================
   // 앱을 열면 바로 내 위치를 확인한다. 브라우저가 처음 한 번 허용 여부를 묻고, 허용하면 이후에는 묻지 않는다.
-  var geo = { pos: null, at: 0, err: null, pending: null };
-  function locate(force) {
-    if (!navigator.geolocation) { geo.err = 'unsupported'; return Promise.resolve(null); }
-    if (!force && geo.pos && Date.now() - geo.at < 120000) return Promise.resolve(geo.pos);
-    if (geo.pending) return geo.pending;
-    geo.pending = new Promise(function (resolve) {
+  // 한 번 위치를 허용하면 그 위치를 기기에 기억해 두고, 다음에 열 때 브라우저가 다시 물을 상황이면(사파리 '묻기' 설정)
+  // 묻지 않고 기억한 위치를 바로 쓴다. 브라우저가 이미 허용 상태이면 조용히 새 위치를 받는다.
+  // '내 위치 다시 확인'을 누를 때만 새로 묻는다.
+  var geo = { pos: null, at: 0, err: null, pending: null, saved: false };
+  var GEO_KEY = 'ts.geo';
+  function geoSaved() { try { var g = JSON.parse(localStorage.getItem(GEO_KEY) || 'null'); return g && isFinite(g.lat) && isFinite(g.lng) ? g : null; } catch (_) { return null; } }
+  function geoSave(p) { try { localStorage.setItem(GEO_KEY, JSON.stringify({ lat: p.lat, lng: p.lng, at: Date.now(), ok: 1 })); } catch (_) {} }
+  function geoPermState() {
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        return navigator.permissions.query({ name: 'geolocation' }).then(function (s) { return s.state; }, function () { return null; });
+      }
+    } catch (_) {}
+    return Promise.resolve(null);
+  }
+  var geoTried = false; // 이번에 앱을 연 뒤 현재 위치를 받아 봤는지
+  function geoFresh() {
+    return new Promise(function (resolve) {
       navigator.geolocation.getCurrentPosition(
         function (p) {
           geo.pos = { lat: p.coords.latitude, lng: p.coords.longitude };
-          geo.at = Date.now(); geo.err = null; geo.pending = null;
+          geo.at = Date.now(); geo.err = null; geo.saved = false;
+          geoSave(geo.pos);
           resolve(geo.pos);
         },
         function (err) {
           geo.err = err && err.code === 1 ? 'denied' : 'failed';
-          geo.pending = null;
           resolve(geo.pos); // 예전에 확인한 위치가 있으면 그것이라도 쓴다
         },
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 120000 }
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
       );
     });
-    return geo.pending;
+  }
+  // 기억한 위치로 먼저 그린 화면을, 현재 위치를 받으면 다시 그린다
+  function geoMovedRefresh(before) {
+    var now = geo.pos;
+    if (!now || geo.saved) {
+      if (geo.err) showToast('📍 현재 위치를 받지 못해 지난번 위치로 보여 드려요 · 「내 위치 다시 확인」으로 다시 받을 수 있어요', 5000);
+      return;
+    }
+    if (before && distKm(before.lat, before.lng, now.lat, now.lng) < 0.3) return;
+    state.nearPos = now;
+    if (state.view === 'map' && state.mapLayers && state.mapLayers['내 주변']) renderMap();
+    else if (state.view === 'food') renderFood();
+  }
+  // 앱을 열 때마다 현재 위치를 받는다(사파리가 물으면 '허용' 한 번). 기억한 위치가 있으면 기다리는 동안 그 위치로 먼저 보여 준다.
+  function locate(force) {
+    if (!navigator.geolocation) { geo.err = 'unsupported'; return Promise.resolve(null); }
+    if (!force && geo.pos && !geo.saved && Date.now() - geo.at < 120000) return Promise.resolve(geo.pos);
+    if (geo.pending) return (!force && geo.saved && geo.pos) ? Promise.resolve(geo.pos) : geo.pending; // 허용을 기다리는 동안 다른 화면은 기억한 위치로
+    var saved = geoSaved();
+    if (!geo.pos && saved) { geo.pos = { lat: saved.lat, lng: saved.lng }; geo.at = saved.at || 0; geo.saved = true; }
+    var before = geo.pos;
+    var job = (force ? Promise.resolve('ask') : geoPermState()).then(function (st) {
+      // 이번에 연 뒤 처음이거나, 직접 다시 확인을 눌렀거나, 이미 허용된 상태면 현재 위치를 받는다
+      if (force || !geoTried || st === 'granted') { geoTried = true; return geoFresh(); }
+      return geo.pos;
+    }).then(function (r) { geo.pending = null; return r; }, function () { geo.pending = null; return geo.pos; });
+    geo.pending = job;
+    if (!force && before && geo.saved) {
+      // 기억한 위치로 바로 그리고, 현재 위치가 오면 다시 그린다
+      job.then(function () { geoMovedRefresh(before); });
+      return Promise.resolve(before);
+    }
+    return job;
   }
   function meIcon() {
     return naver.maps.Point ? { content: '<div class="me-dot" title="내 위치"></div>', anchor: new naver.maps.Point(9, 9) } : undefined;
@@ -7579,7 +7644,7 @@
       gs.approval = !!j.approval;
       gs.status = 'ready';
     } catch (err) {
-      console.error('[gstories] load failed', err);
+      if (!err || err.status !== 401) console.error('[gstories] load failed', err); // 로그인 전(게스트 입장 화면)에는 401 이 정상
       gs.status = 'error';
     }
   }
@@ -8098,7 +8163,7 @@
     var owner = !!(state.auth && state.auth.canEdit);
     var box = el('<section class="picks-box">' +
       '<div class="picks-head"><div><b>🍜 추천 맛집</b> <span class="copy-hint" data-pkn></span></div><button type="button" class="chip picks-add" data-pkadd>＋ 맛집 등록</button></div>' +
-      '<div class="chip-row picks-filter" data-pkf>' + [['', '전체'], ['yt', '📺 유튜버 맛집'], ['rec', '⭐ 운영자·게스트 추천'], ['mine', '내가 올린 곳']].concat(owner ? [['pending', '⏳ 확인 대기']] : []).map(function (f) {
+      '<div class="chip-row picks-filter" data-pkf>' + [['', '전체'], ['yt', '📺 유튜버 맛집'], ['tour', '🏛 관광공사 추천'], ['rec', '⭐ 운영자·게스트 추천']].concat(owner ? [['pending', '⏳ 확인 대기']] : []).map(function (f) {
         return '<button type="button" class="chip' + (state.pickFilter === f[0] ? ' active' : '') + '" data-f="' + f[0] + '">' + f[1] + '</button>';
       }).join('') + '</div>' +
       '<label class="filter pk-area"><span>지역</span><select data-pkarea><option value="">전국</option>' + SIDO_NAMES.map(function (r) { return '<option' + (state.pickArea === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select></label>' +
@@ -8120,20 +8185,28 @@
       var items = all.filter(function (p) {
         if (label && label !== '전국' && p.sido !== label) return false;
         if (f === 'yt') return isYt(p);
-        if (f === 'rec') return !isYt(p);
-        if (f === 'mine') return p.mine || (owner && p.byOwner); // 운영자는 운영자로 올린 곳
+        if (f === 'rec' || f === 'mine') return !isYt(p); // 운영자·게스트가 직접 올린 곳 (유튜버 정보 없는 곳)
         if (f === 'pending') return p.status === 'pending';
         return true;
       });
       var pend = all.filter(function (p) { return p.status === 'pending'; }).length;
       // '전체'일 때만 아래 '내 주변 맛집'(공공데이터)을 함께 보여 준다
+      // '관광공사 추천'은 한국관광공사 맛집(내 주변 맛집)만 보여 준다
       var nearSec = document.querySelector('#view-food .food-near');
-      if (nearSec && box.closest('#view-food')) nearSec.style.display = f ? 'none' : '';
+      if (nearSec && box.closest('#view-food')) nearSec.style.display = (!f || f === 'tour') ? '' : 'none';
+      var tour = f === 'tour';
+      box.querySelector('.pk-area').style.display = tour ? 'none' : '';
+      var seedSlot = box.querySelector('[data-pkseed]'); if (seedSlot) seedSlot.style.display = tour ? 'none' : '';
+      if (tour) {
+        box.querySelector('[data-pkn]').textContent = '';
+        box.querySelector('[data-pklist]').innerHTML = '<div class="copy-hint">👇 아래 「📍 내 주변 맛집」이 한국관광공사가 소개하는 맛집이에요 (가까운 순).</div>';
+        return;
+      }
       if (here) items.forEach(function (p) { p._d = p.lat != null ? distKm(here.lat, here.lng, p.lat, p.lng) : 9999; });
       if (here) items.sort(function (x, y) { return x._d - y._d; });
       box.querySelector('[data-pkn]').textContent = all.length + '곳' + (label ? ' · ' + label + ' ' + items.length + '곳' : '') + (here ? ' · 가까운 순' : '') + (owner && pend ? ' · 확인 대기 ' + pend + '곳' : '');
       var list = box.querySelector('[data-pklist]');
-      if (!items.length) { list.innerHTML = '<div class="copy-hint">' + (all.length ? '조건에 맞는 맛집이 없어요.' : '아직 등록된 추천 맛집이 없어요. 다녀온 맛집을 등록해 보세요!') + '</div>'; return; }
+      if (!items.length) { list.innerHTML = '<div class="copy-hint">' + (f === 'rec' ? '아직 운영자·게스트가 직접 올린 맛집이 없어요. 「＋ 맛집 등록」으로 다녀온 맛집을 올려 보세요!' : all.length ? '조건에 맞는 맛집이 없어요.' : '아직 등록된 추천 맛집이 없어요. 다녀온 맛집을 등록해 보세요!') + '</div>'; return; }
       items = items.slice(0, 300);
       list.innerHTML = '';
       items.forEach(function (p) { list.appendChild(pickCard(p)); });
