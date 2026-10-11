@@ -4683,11 +4683,13 @@ var picks_default = async (req, context) => {
       }
       if (!isOwner && !acct && !author) return jsonResponse({ error: "author key required" }, { status: 400 });
       const body = clean3(input);
-      if (!body.name || body.lat == null || !body.kakaoId) return jsonResponse({ error: "pick a place" }, { status: 400 });
+      if (!body.name || body.lat == null || !body.kakaoId && !isOwner) return jsonResponse({ error: "pick a place" }, { status: 400 });
+      const nameKey = (x) => String(x || "").replace(/\s+/g, "").toLowerCase();
+      const near = (p) => p.lat != null && Math.abs(p.lat - body.lat) < 1e-3 && Math.abs(p.lng - body.lng) < 12e-4;
       const { blobs } = await s.list({ prefix: "p-" });
       for (const b of blobs) {
         const p = await s.get(b.key, { type: "json" }).catch(() => null);
-        if (p && p.kakaoId === body.kakaoId) return jsonResponse({ error: "exists", item: isOwner || p.status === "ok" || isMine(p) ? strip2(p) : null }, { status: 409 });
+        if (p && (body.kakaoId && p.kakaoId === body.kakaoId || !body.kakaoId && nameKey(p.name) === nameKey(body.name) && near(p))) return jsonResponse({ error: "exists", item: isOwner || p.status === "ok" || isMine(p) ? strip2(p) : null }, { status: 409 });
       }
       body.photoIds = await ownPhotos2(body.photoIds, [acct, author], isOwner);
       const now = (/* @__PURE__ */ new Date()).toISOString();

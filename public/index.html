@@ -1121,6 +1121,7 @@
         <label class="filter"><span>카테고리 (리스트)</span><select data-minelist></select></label>
         <label class="filter"><span>세부 항목 (분류)</span><select id="mine-sub"></select></label>
         <label class="chip import-btn">가져오기<input type="file" accept=".json,application/json" id="mine-import" hidden></label>
+        <button type="button" class="chip" id="mine-move" hidden>🍜 운영자 추천 맛집으로 옮기기</button>
       </div>
       <div id="mine-status" class="status-line" hidden></div>
       <div class="status-line err static-hint" hidden>카드의 지도 그림을 불러오지 못했어요. 카카오 개발자 사이트의 앱 도메인에 이 주소가 등록되어 있는지 확인해주세요.</div>
@@ -4045,6 +4046,68 @@
     });
   }
 
+  // ----- 운영자: 내 장소(지금 보고 있는 목록)를 ⭐ 운영자 추천 맛집으로 옮기기
+  function openMineMove() {
+    var shown = state.mineShown || [];
+    var items = shown.filter(function (p) { return isFinite(Number(p.lat)) && isFinite(Number(p.lng)) && p.lat != null && p.lng != null; });
+    var noLL = shown.length - items.length;
+    var label = [state.mineList || '내 장소 전체', state.mineSub].filter(Boolean).join(' · ');
+    var sheet = el('<div class="sheet-backdrop"><div class="sheet"><div class="sheet-head"><h2>🍜 운영자 추천 맛집으로 옮기기</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div>' +
+      '<div class="admin-note">지금 보고 있는 <b>「' + escapeHtml(label) + '」 ' + items.length + '곳</b>을 맛집 탭의 <b>⭐ 운영자 추천</b>으로 옮겨요.<br>' +
+        '· 카카오 지도에서 같은 가게(이름이 같고 300m 안)를 찾아 전화·분류·카카오맵 주소를 채워요. 못 찾은 곳도 내 장소의 이름·주소·위치 그대로 옮겨요.<br>' +
+        '· 내 장소 메모는 한줄평으로 들어가요. 추천 맛집에 이미 있는 곳은 새로 만들지 않아요.' +
+        (noLL ? '<br>· 위치가 없는 ' + noLL + '곳은 옮기지 못해요.' : '') + '</div>' +
+      '<label class="seed-row" style="margin:10px 0"><input type="checkbox" data-mmdel checked><span><b>옮긴 곳은 내 장소에서 빼기</b><small>끄면 내 장소와 추천 맛집 두 곳에 모두 남아요.</small></span></label>' +
+      '<div class="status-line" data-mmmsg hidden></div>' +
+      '<button type="button" class="primary-btn" data-mmgo' + (items.length ? '' : ' disabled') + '>' + items.length + '곳 옮기기</button></div></div>');
+    $('sheet-root').appendChild(sheet);
+    var running = false, done = false;
+    function close() { if (running) return; sheet.remove(); }
+    sheet.querySelector('[data-close]').addEventListener('click', close);
+    var go = sheet.querySelector('[data-mmgo]'), msg = sheet.querySelector('[data-mmmsg]');
+    var nk = function (s) { return String(s || '').replace(/\s+/g, '').toLowerCase(); };
+    go.addEventListener('click', async function () {
+      if (done) { close(); return; }
+      running = true; go.disabled = true;
+      sheet.querySelector('[data-mmdel]').disabled = true;
+      msg.hidden = false; msg.className = 'status-line';
+      var P = await kakaoPlaces().catch(function () { return null; });
+      var moved = [], ok = 0, dup = 0, fail = 0, matched = 0;
+      for (var i = 0; i < items.length; i++) {
+        var p = items[i], lat = Number(p.lat), lng = Number(p.lng);
+        go.textContent = '옮기는 중... (' + (i + 1) + '/' + items.length + ')';
+        var r = null;
+        if (P && window.kakao && kakao.maps && kakao.maps.LatLng) {
+          var res = await kakaoSearch(p.name, { location: new kakao.maps.LatLng(lat, lng), radius: 300 }).catch(function () { return []; });
+          var k = nk(p.name);
+          r = res.filter(function (x) { var n = nk(x.place_name); return k && (n.indexOf(k) >= 0 || k.indexOf(n) >= 0) && distKm(lat, lng, Number(x.y), Number(x.x)) < 0.3; })
+            .sort(function (a, b) { return distKm(lat, lng, Number(a.y), Number(a.x)) - distKm(lat, lng, Number(b.y), Number(b.x)); })[0] || null;
+        }
+        if (r) matched++;
+        var body = r ? placeFromKakao(r) : { name: p.name, address: p.address || '', road: '', phone: '', lat: lat, lng: lng, cat: p.category || '' };
+        body.review = String(p.memo || '').slice(0, 300);
+        try { await gapi('picks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); ok++; moved.push(p.id); }
+        catch (e) { if (e.status === 409) { dup++; moved.push(p.id); } else fail++; }
+      }
+      var removed = 0;
+      if (sheet.querySelector('[data-mmdel]').checked && moved.length) {
+        go.textContent = '내 장소 정리하는 중...';
+        try {
+          var entry = await loadItems('내 장소', true);
+          var keep = (entry.items || []).filter(function (x) { return moved.indexOf(x.id) < 0; });
+          removed = (entry.items || []).length - keep.length;
+          await api('myplaces', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: keep }) });
+        } catch (e) { fail++; removed = 0; msg.className = 'status-line err'; }
+      }
+      running = false; done = true;
+      msg.textContent = ok + '곳을 운영자 추천 맛집으로 옮겼어요 (카카오에서 찾은 곳 ' + matched + ')' + (dup ? ' · 이미 있던 곳 ' + dup : '') + (fail ? ' · 실패 ' + fail : '') + (removed ? ' · 내 장소에서 ' + removed + '곳 뺐어요' : '') + '.';
+      go.textContent = '닫기'; go.disabled = false;
+      delete state.cache[cacheKey('내 장소')];
+      picksCache.items = null;
+      if (state.view === 'mine') renderMine(true);
+    });
+  }
+  $('mine-move').addEventListener('click', openMineMove);
   $('mine-import').addEventListener('change', function () {
     var input = $('mine-import');
     var file = input.files && input.files[0];
@@ -4085,6 +4148,8 @@
     var shownItems = filterMine(entry.items);
     fillMineSubs(shownItems);
     if (state.mineSub) shownItems = shownItems.filter(function (p) { return p.category === state.mineSub; });
+    state.mineShown = shownItems;
+    $('mine-move').hidden = !(state.auth && state.auth.canEdit) || !shownItems.length;
     status.hidden = false;
     status.className = 'status-line';
     status.textContent = [state.mineList || '내 장소', state.mineSub].filter(Boolean).join(' · ') + ' ' + shownItems.length + '곳' + (entry.updatedAt ? ' · ' + entry.updatedAt + ' 가져옴' : '');
@@ -8196,7 +8261,17 @@
       if (nearSec && box.closest('#view-food')) nearSec.style.display = (!f || f === 'tour') ? '' : 'none';
       var tour = f === 'tour';
       box.querySelector('.pk-area').style.display = tour ? 'none' : '';
-      var seedSlot = box.querySelector('[data-pkseed]'); if (seedSlot) seedSlot.style.display = tour ? 'none' : '';
+      // 운영자 단추: 기본 목록 넣기는 '📺 유튜버 맛집'에서, 나중에 확인할 곳은 '⏳ 확인 대기'에서만
+      var seedSlot = box.querySelector('[data-pkseed]');
+      if (seedSlot) {
+        seedSlot.__vis = function () {
+          seedSlot.querySelectorAll('[data-sd]').forEach(function (b) {
+            var k = b.getAttribute('data-sd');
+            b.style.display = (k === 'left' && f === 'yt') || (k === 'held' && f === 'pending') ? '' : 'none';
+          });
+        };
+        seedSlot.__vis();
+      }
       if (tour) {
         box.querySelector('[data-pkn]').textContent = '';
         box.querySelector('[data-pklist]').innerHTML = '<div class="copy-hint">👇 아래 「📍 내 주변 맛집」이 한국관광공사가 소개하는 맛집이에요 (가까운 순).</div>';
@@ -8234,6 +8309,7 @@
       if (left.length) html += '<button type="button" class="link-btn" style="margin:6px 8px 0 0" data-sd="left">📺 유튜버 맛집 기본 목록 넣기 (' + left.length + '곳 남음)</button>';
       if (held.length) html += '<button type="button" class="link-btn" style="margin:6px 0 0" data-sd="held">🔎 나중에 확인할 곳 (' + held.length + '곳)</button>';
       slot.innerHTML = html;
+      if (slot.__vis) slot.__vis();
       slot.querySelectorAll('[data-sd]').forEach(function (b) {
         b.addEventListener('click', function () {
           if (b.getAttribute('data-sd') === 'left') openSeedImport(left); else openSeedHold(held, hold);

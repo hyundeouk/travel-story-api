@@ -130,12 +130,15 @@ export default async (req: Request, context: Context) => {
       }
       if (!isOwner && !acct && !author) return jsonResponse({ error: 'author key required' }, { status: 400 });
       const body = clean(input);
-      if (!body.name || body.lat == null || !body.kakaoId) return jsonResponse({ error: 'pick a place' }, { status: 400 });
-      // 같은 가게(카카오 장소 번호)가 이미 있으면 새로 만들지 않는다
+      // 카카오 장소 번호가 꼭 있어야 한다 (운영자가 내 장소에서 옮겨 오는 곳은 카카오에서 못 찾았으면 없이도 된다)
+      if (!body.name || body.lat == null || (!body.kakaoId && !isOwner)) return jsonResponse({ error: 'pick a place' }, { status: 400 });
+      // 같은 가게(카카오 장소 번호, 번호가 없으면 같은 이름·100m 안)가 이미 있으면 새로 만들지 않는다
+      const nameKey = (x: string) => String(x || '').replace(/\s+/g, '').toLowerCase();
+      const near = (p: any) => p.lat != null && Math.abs(p.lat - (body.lat as number)) < 0.001 && Math.abs(p.lng - (body.lng as number)) < 0.0012;
       const { blobs } = await s.list({ prefix: 'p-' });
       for (const b of blobs) {
         const p: any = await s.get(b.key, { type: 'json' }).catch(() => null);
-        if (p && p.kakaoId === body.kakaoId) return jsonResponse({ error: 'exists', item: (isOwner || p.status === 'ok' || isMine(p)) ? strip(p) : null }, { status: 409 });
+        if (p && ((body.kakaoId && p.kakaoId === body.kakaoId) || (!body.kakaoId && nameKey(p.name) === nameKey(body.name) && near(p)))) return jsonResponse({ error: 'exists', item: (isOwner || p.status === 'ok' || isMine(p)) ? strip(p) : null }, { status: 409 });
       }
       body.photoIds = await ownPhotos(body.photoIds, [acct, author], isOwner);
       const now = new Date().toISOString();
