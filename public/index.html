@@ -368,7 +368,8 @@
   .pd-title { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
   .pd-title small { font-size: 1.05rem; color: var(--ink-dim); font-weight: 600; margin-left: 8px; }
   .pd-sub { color: var(--ink-dim); font-size: 0.92rem; }
-  .pd-top { display: grid; gap: 22px; }
+  .pd-top { display: grid; gap: 22px; grid-template-columns: minmax(0, 1fr); }
+  .pd-top > *, .pd-gallery, .pd-info { min-width: 0; }
   @media (min-width: 900px) { .pd-top { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start; } }
   .pd-hero { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 70vh; background: #15181a; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
   .pd-hero.has-img { cursor: zoom-in; }
@@ -509,6 +510,8 @@
   .pick-chosen { cursor: default; border-color: var(--accent); gap: 2px; } .pick-res small, .pick-chosen small { color: var(--ink-dim); font-size: 12px; }
   .pk-yt { margin: 4px 0 12px; } .pk-yt summary { cursor: pointer; font-weight: 700; font-size: 0.9rem; margin-bottom: 8px; }
   .fix-sec .chip-row { margin-top: 6px; }
+  .fix-sec .field textarea, .fix-sec textarea, .fix-form .field textarea, .fix-form .field input { font-family: var(--font-body); font-size: 1rem; line-height: 1.5; color: var(--ink); }
+  body.kb-open .sheet-backdrop.full .page-body, body.kb-open .sheet-backdrop .sheet { padding-bottom: calc(var(--kb, 0px) + 40px); }
   .pd-info-btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .pd-info-btns .link-btn { margin: 0; }
   .link-btn.fx-red, .chip.fx-red { background: #c62828; border-color: #c62828; color: #fff; }
@@ -709,7 +712,8 @@
   .pd-h4 { font-size: 0.95rem; font-weight: 800; margin: 16px 0 6px; color: var(--accent); }
   [data-mtninfo] .detail-overview,
   [data-descsec] .detail-overview { font-family: var(--font-body); font-size: 0.97rem; line-height: 1.8; max-width: 62em; }
-  .pd-table .detail-row { grid-template-columns: 112px 1fr; gap: 0; padding: 0; }
+  .pd-table .detail-row { grid-template-columns: 112px minmax(0, 1fr); gap: 0; padding: 0; }
+  @media (max-width: 520px) { .pd-table .detail-row { grid-template-columns: 88px minmax(0, 1fr); } .pd-table .detail-row .k { padding: 10px 9px; } }
   .pd-table .detail-row .k { background: var(--surface-2); padding: 10px 12px; font-size: 0.88rem; }
   .pd-table .detail-row .v { padding: 10px 12px; white-space: pre-line; overflow-wrap: anywhere; }
   .pd-table .detail-row:last-child { border-bottom: 1px solid var(--line); }
@@ -1262,6 +1266,34 @@
     }
     return res.json();
   }
+  // ===== 휴대폰 자판이 입력칸을 덮지 않게: 자판 높이만큼 아래 여백을 주고 입력칸을 화면 가운데로 =====
+  (function () {
+    var vv = window.visualViewport;
+    function focused() { var a = document.activeElement; return a && /^(TEXTAREA|INPUT|SELECT)$/.test(a.tagName) && a.closest('.sheet') ? a : null; }
+    function reveal(a) {
+      if (!a) return;
+      setTimeout(function () { try { a.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) { a.scrollIntoView(); } }, 60);
+    }
+    function upd() {
+      if (!vv) return;
+      var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      document.documentElement.style.setProperty('--kb', kb + 'px');
+      var open = kb > 80;
+      var was = document.body.classList.contains('kb-open');
+      document.body.classList.toggle('kb-open', open);
+      if (open && !was) reveal(focused());
+    }
+    if (vv) { vv.addEventListener('resize', upd); vv.addEventListener('scroll', upd); }
+    // 자판이 이미 열려 있거나 visualViewport 가 없는 브라우저(일부 앱 안 브라우저)도 입력칸으로 옮긴다
+    document.addEventListener('focusin', function (e) {
+      var t = e.target;
+      if (!t || !/^(TEXTAREA|INPUT)$/.test(t.tagName) || !t.closest('.sheet') || !matchMedia('(pointer: coarse)').matches) return;
+      document.body.classList.add('kb-open');
+      if (!vv) document.documentElement.style.setProperty('--kb', Math.round(window.innerHeight * 0.45) + 'px');
+      setTimeout(function () { reveal(t); }, 350);
+    });
+    document.addEventListener('focusout', function () { setTimeout(function () { if (!focused()) { if (!vv || Math.round(window.innerHeight - vv.height) < 80) document.body.classList.remove('kb-open'); } }, 200); });
+  })();
   // ===== 게스트 사용 기록 · 오류 알림 =====
   // 게스트 기기에서 어떤 기능을 썼는지(횟수)와 오류를 모아 운영자에게 보낸다. 운영자 기기는 보내지 않는다.
   // 위치·글 내용·검색어는 보내지 않는다. 같은 오류는 한 번만, 한 번 열 때 최대 15건.
@@ -8089,11 +8121,14 @@
         if (label && label !== '전국' && p.sido !== label) return false;
         if (f === 'yt') return isYt(p);
         if (f === 'rec') return !isYt(p);
-        if (f === 'mine') return p.mine;
+        if (f === 'mine') return p.mine || (owner && p.byOwner); // 운영자는 운영자로 올린 곳
         if (f === 'pending') return p.status === 'pending';
         return true;
       });
       var pend = all.filter(function (p) { return p.status === 'pending'; }).length;
+      // '전체'일 때만 아래 '내 주변 맛집'(공공데이터)을 함께 보여 준다
+      var nearSec = document.querySelector('#view-food .food-near');
+      if (nearSec && box.closest('#view-food')) nearSec.style.display = f ? 'none' : '';
       if (here) items.forEach(function (p) { p._d = p.lat != null ? distKm(here.lat, here.lng, p.lat, p.lng) : 9999; });
       if (here) items.sort(function (x, y) { return x._d - y._d; });
       box.querySelector('[data-pkn]').textContent = all.length + '곳' + (label ? ' · ' + label + ' ' + items.length + '곳' : '') + (here ? ' · 가까운 순' : '') + (owner && pend ? ' · 확인 대기 ' + pend + '곳' : '');
