@@ -490,13 +490,18 @@
   .picks-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
   .picks-head .copy-hint { margin: 0; display: inline; }
   .picks-filter { margin-top: 8px; }
-  .picks-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; margin-top: 10px; }
   .pick-card { display: flex; gap: 10px; align-items: flex-start; text-align: left; border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--bg); color: var(--ink); font: inherit; cursor: pointer; position: relative; min-width: 0; }
   .pick-card.st-pending { border-style: dashed; border-color: #f79009; } .pick-card.st-hidden { opacity: 0.6; }
   .pk-img { flex: none; width: 56px; height: 56px; border-radius: 10px; overflow: hidden; background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 24px; }
   .pk-img img { width: 100%; height: 100%; object-fit: cover; }
   .pk-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; } .pk-body b { font-size: 0.95rem; }
   .pk-body small { color: var(--ink-dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .pick-place .card-thumb { position: relative; }
+  .pk-src { position: absolute; left: 8px; bottom: 8px; z-index: 2; font-size: 12px; font-weight: 700; color: #fff; background: rgba(0,0,0,0.62); border-radius: 999px; padding: 2px 9px; }
+  .pk-src.yt { background: rgba(200, 30, 30, 0.85); }
+  .pick-place.st-pending { outline: 2px dashed #f79009; outline-offset: -2px; } .pick-place.st-hidden { opacity: 0.6; }
+  .pick-place .pk-st { z-index: 2; top: 8px; right: 8px; font-size: 12px; padding: 1px 8px; }
+  .picks-list.place-list { margin-top: 10px; }
   .pk-st { position: absolute; top: 6px; right: 6px; font-size: 11px; background: #f79009; color: #fff; border-radius: 999px; padding: 0 7px; }
   .picks-sep { grid-column: 1 / -1; color: var(--ink-dim); font-size: 0.85rem; margin: 6px 2px 0; }
   .pick-results { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; max-height: 260px; overflow-y: auto; }
@@ -3086,7 +3091,7 @@
 
   function loadImg(thumb, card, url, referrer) {
     return new Promise(function (resolve) {
-      if (!url || !/^(https:\/\/|\/api\/photos\/|\/img\/)/.test(url)) return resolve(false);
+      if (!url || !/^(https:\/\/|\/api\/photos\/|\/api\/gphotos\/|\/img\/)/.test(url)) return resolve(false);
       var img = document.createElement('img');
       img.alt = '';
       if (!referrer) img.referrerPolicy = 'no-referrer';
@@ -7756,6 +7761,30 @@
         .catch(function () { showToast('바꾸지 못했어요'); });
     });
   }
+  // 추천 맛집 카드: 내 주변 맛집(placeCard)과 같은 모양 — 사진(올린 사진 → 이름으로 찾은 사진 → 지도 그림) + 지역 표시 + 이름·소개·메뉴·주소
+  function pickCard(p) {
+    var dist = p._d != null && p._d < 9999 ? (p._d < 1 ? Math.round(p._d * 1000) + 'm' : (Math.round(p._d * 10) / 10) + 'km') : '';
+    var lines = [['소개', pickBadge(p)], ['메뉴', p.menu], ['주소', p.road || p.address], ['거리', dist ? '내 위치에서 ' + dist : '']];
+    var card = el('<div class="place-card pick-place' + (p.status !== 'ok' ? ' st-' + p.status : '') + '">' +
+      '<div class="card-thumb"><div class="card-ph">' + (isYt(p) ? '📺' : '🍜') + '</div>' +
+        (p.sido ? '<span class="region-badge">' + escapeHtml(p.sido) + '</span>' : '') +
+        '<span class="pk-src ' + (isYt(p) ? 'yt' : 'rec') + '">' + escapeHtml(isYt(p) ? '📺 ' + (p.youtuber || '유튜버') : p.byOwner ? '⭐ 운영자 추천' : '👥 게스트 추천') + '</span>' +
+        (p.status !== 'ok' ? '<span class="pk-st">' + (p.status === 'pending' ? '확인 대기' : '숨김') + '</span>' : '') +
+      '</div>' +
+      '<div class="card-body"><h3>' + escapeHtml(p.name) + '</h3>' +
+        lines.filter(function (l) { return l[1]; }).map(function (l) { return '<div class="card-line"><b>' + escapeHtml(l[0]) + ':</b> ' + escapeHtml(l[1]) + '</div>'; }).join('') +
+        (p.review ? '<div class="card-note">“' + escapeHtml(p.review) + '”</div>' : '') +
+      '</div></div>');
+    whenVisible(card, function () {
+      var thumb = card.querySelector('.card-thumb');
+      var first = p.photoIds && p.photoIds[0] ? gPhotoUrl(p.photoIds[0]) : '';
+      return Promise.resolve(first ? loadImg(thumb, card, first, true) : false).then(function (ok) {
+        if (!ok) return setThumb(card, { q: p.name, lat: p.lat, lng: p.lng });
+      });
+    });
+    card.addEventListener('click', function () { openPick(p); });
+    return card;
+  }
   // 둘러보기 → 맛집 맨 위: 추천 맛집 목록
   function picksSection() {
     var owner = !!(state.auth && state.auth.canEdit);
@@ -7766,7 +7795,7 @@
       }).join('') + '</div>' +
       '<label class="filter pk-area"><span>지역</span><select data-pkarea><option value="">전국</option>' + SIDO_NAMES.map(function (r) { return '<option' + (state.pickArea === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select></label>' +
       (owner ? '<div data-pkseed></div>' : '') +
-      '<div class="picks-list" data-pklist><div class="status-line">불러오는 중...</div></div></section>');
+      '<div class="place-list picks-list" data-pklist><div class="status-line">불러오는 중...</div></div></section>');
     box.querySelector('[data-pkadd]').addEventListener('click', function () { openPickForm(null); });
     box.querySelector('[data-pkarea]').addEventListener('change', function () { state.pickArea = this.value; paint(); });
     box.querySelector('[data-pkf]').addEventListener('click', function (e) {
@@ -7795,16 +7824,8 @@
       var list = box.querySelector('[data-pklist]');
       if (!items.length) { list.innerHTML = '<div class="copy-hint">' + (all.length ? '조건에 맞는 맛집이 없어요.' : '아직 등록된 추천 맛집이 없어요. 다녀온 맛집을 등록해 보세요!') + '</div>'; return; }
       items = items.slice(0, 300);
-      list.innerHTML = items.map(function (p, i) {
-        var img = p.photoIds && p.photoIds[0] ? '<img alt="" loading="lazy" src="' + escapeHtml(gPhotoUrl(p.photoIds[0])) + '">' : '<span>' + (isYt(p) ? '📺' : '🍜') + '</span>';
-        return '<button type="button" class="pick-card' + (p.status !== 'ok' ? ' st-' + p.status : '') + '" data-i="' + i + '">' +
-          '<span class="pk-img">' + img + '</span><span class="pk-body"><b>' + escapeHtml(p.name) + '</b>' +
-          '<small>' + escapeHtml(pickBadge(p)) + (p.sido ? ' · ' + escapeHtml(p.sido) : '') + (p._d != null && p._d < 9999 ? ' · ' + (p._d < 1 ? Math.round(p._d * 1000) + 'm' : (Math.round(p._d * 10) / 10) + 'km') : '') + '</small>' +
-          (p.menu ? '<small>🍽 ' + escapeHtml(p.menu) + '</small>' : '') +
-          (p.review ? '<small class="pk-rev">“' + escapeHtml(p.review) + '”</small>' : '') + '</span>' +
-          (p.status !== 'ok' ? '<span class="pk-st">' + (p.status === 'pending' ? '확인 대기' : '숨김') + '</span>' : '') + '</button>';
-      }).join('');
-      list.querySelectorAll('[data-i]').forEach(function (b) { b.addEventListener('click', function () { openPick(items[Number(b.getAttribute('data-i'))]); }); });
+      list.innerHTML = '';
+      items.forEach(function (p) { list.appendChild(pickCard(p)); });
     }
     loadPicks().then(function (items) {
       all = items.slice();
