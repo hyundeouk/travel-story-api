@@ -998,6 +998,7 @@
           <button type="button" class="chip" data-layer="산" style="--c:#8d7b5a">그 밖의 산 <span class="near-n" data-nearn="봉"></span></button>
           <button type="button" class="chip" data-layer="종주" style="--c:#0e7490">종주 코스 <span class="near-n" data-nearn="종주"></span></button>
           <button type="button" class="chip" data-layer="휴양림" style="--c:#3f7d2c">휴양림 <span class="near-n" data-nearn="휴양림"></span></button>
+          <button type="button" class="chip" data-layer="캠핑장" style="--c:#2f7d4f">캠핑장 <span class="near-n" data-nearn="캠핑"></span></button>
           <button type="button" class="chip" data-layer="골프장" style="--c:#4d7c0f">골프장 <span class="near-n" data-nearn="골프"></span></button>
           <button type="button" class="chip" data-layer="명소" style="--c:#2e7d57">명소 <span class="near-n" data-nearn="명소"></span></button>
           <button type="button" class="chip" data-layer="문화유산" style="--c:#a8552d">문화유산 <span class="near-n" data-nearn="문화유산"></span></button>
@@ -3704,7 +3705,7 @@
     var v = {
       title: c.n, badge: '캠핑장', sub: [c.t, ((c.s || '') + ' ' + (c.g || '')).trim()].filter(Boolean).join(' · '), rows: rows,
       place: c.a, tel: c.p, lat: c.y, lng: c.x, ph: '⛺', key: 'cp:' + c.id, image: c.img || null, imageCredit: '한국관광공사 고캠핑',
-      q: c.n, mapQuery: c.n, srcName: srcs, camp: c, wikiOk: false,
+      q: c.n, mapQuery: c.n, srcName: srcs, camp: c, wikiOk: false, campSat: true,
     };
     if (c.goId) v.morePhotos = function () {
       return api('camping?img=' + encodeURIComponent(c.goId), { quiet: true }).then(function (j) {
@@ -3793,20 +3794,30 @@
         if (q && String(c.n).replace(/\s+/g, '').indexOf(q) < 0) return false;
         return true;
       });
-      var pos = await Promise.race([locate(), new Promise(function (r) { setTimeout(function () { r(null); }, 6000); })]);
-      if (my !== campSeq) return;
-      var near = !lab && !q;
-      if (near && !pos) { list.innerHTML = '<div class="empty-state"><strong>지역을 고르거나 이름으로 찾아 주세요</strong>위치를 허용하면 가까운 캠핑장부터 보여 드려요.</div>'; status.textContent = '전국 ' + data.items.length + '곳'; return; }
-      var withD = pick.map(function (c) { return { c: c, d: pos ? distKm(pos.lat, pos.lng, c.y, c.x) : null }; });
-      if (pos) withD.sort(function (a, b) { return a.d - b.d; }); else withD.sort(function (a, b) { return String(a.c.n).localeCompare(String(b.c.n), 'ko'); });
-      var total = withD.length;
-      var shown = withD.slice(0, near ? 60 : 200);
+      // 캠핑 탭은 전체 목록(지역 → 이름 순). 내 위치에서 가까운 곳은 '내 주변 검색 → 캠핑장'에서 본다.
+      var ORDER = {}; AREAS.forEach(function (a, i) { ORDER[a[1]] = i; });
+      pick.sort(function (a, b) { return ((ORDER[a.s] != null ? ORDER[a.s] : 99) - (ORDER[b.s] != null ? ORDER[b.s] : 99)) || String(a.g || '').localeCompare(String(b.g || ''), 'ko') || String(a.n).localeCompare(String(b.n), 'ko'); });
+      var shown = pick;
       list.innerHTML = '';
-      shown.forEach(function (x) {
-        var c = x.c, v = campView(c);
-        list.appendChild(mtnCard('캠핑장', v, [['유형', c.t], ['지역', ((c.s || '') + ' ' + (c.g || '')).trim()], ['거리', campDistTxt(x.d)], ['반려동물', c.an]], !c.img));
-      });
-      status.textContent = '⛺ 캠핑장 · ' + (near ? '내 위치에서 가까운 ' + shown.length + '곳' : total + '곳' + (total > shown.length ? ' 중 ' + shown.length + '곳' : '') + (pos ? ' · 가까운 순' : '')) +
+      var at = 0, STEP = 90;
+      function more() {
+        if (my !== campSeq) return;
+        var end = Math.min(shown.length, at + STEP);
+        for (; at < end; at++) {
+          var c = shown[at], v = campView(c);
+          list.appendChild(mtnCard('캠핑장', v, [['유형', c.t], ['지역', ((c.s || '') + ' ' + (c.g || '')).trim()], ['반려동물', c.an]], !c.img));
+        }
+        var old = list.querySelector('.camp-more'); if (old) old.remove();
+        if (at < shown.length) {
+          var btn = el('<button type="button" class="link-btn camp-more" style="grid-column:1/-1;justify-self:center">더 보기 (' + (shown.length - at) + '곳 남음)</button>');
+          btn.addEventListener('click', more);
+          list.appendChild(btn);
+          // 화면 아래에 닿으면 저절로 더 불러온다
+          if (window.IntersectionObserver) { var io = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { io.disconnect(); more(); } }, { rootMargin: '600px' }); io.observe(btn); }
+        }
+      }
+      more();
+      status.textContent = '⛺ 캠핑장 · ' + (lab || '전국') + ' ' + shown.length + '곳 · 지역·이름 순 · 내 주변 캠핑장은 「내 주변 검색 → 캠핑장」' +
         ' · 자료: ' + (data.go ? '한국관광공사 고캠핑 ' + data.go + '곳' : '') + (data.go && data.kc ? ' + ' : '') + (data.kc ? '한국문화정보원 ' + data.kc + '곳(2022)' : '') +
         (data.goErr && !isGuest() ? ' · ⚠ 고캠핑 자료를 받지 못했어요(활용신청 승인·키 확인)' : '');
       if (!shown.length) list.innerHTML = '<div class="empty-state"><strong>조건에 맞는 캠핑장이 없어요</strong>지역·유형·이름을 바꿔 보세요.</div>';
@@ -4738,7 +4749,7 @@
   }
 
   // 지도에 표시할 종류. 버튼 색과 핀 색이 같다. 여러 개를 동시에 켤 수 있다.
-  var LAYER_COLOR = { 명소: '#2e7d57', 맛집: '#d9651c', 행사: '#7d4fc4', 문화유산: '#a8552d', 휴양림: '#3f7d2c', 숲길: '#7a6a2f', '내 장소': '#c73a78', 스토리: '#0e8f8f', '내 주변': '#2a7de1', 종주: '#0e7490', BAC: '#d4a017', 'BAC+': '#b7791f', 산: '#8d7b5a', 둘레길: '#0e7490', 골프장: '#4d7c0f' };
+  var LAYER_COLOR = { 명소: '#2e7d57', 맛집: '#d9651c', 행사: '#7d4fc4', 문화유산: '#a8552d', 휴양림: '#3f7d2c', 숲길: '#7a6a2f', '내 장소': '#c73a78', 스토리: '#0e8f8f', '내 주변': '#2a7de1', 종주: '#0e7490', BAC: '#d4a017', 'BAC+': '#b7791f', 산: '#8d7b5a', 둘레길: '#0e7490', 골프장: '#4d7c0f', 캠핑장: '#2f7d4f' };
   // 지도 탭에는 공공 자료만 보여준다 (내 장소·스토리는 각 탭에서 보고, 상세의 "큰 지도에서 보기"는 그 위치에 핀 하나만 찍는다)
   var LAYER_ORDER = ['내 주변', '숲길', 'BAC+', '산', '종주', '휴양림', '골프장', '명소', '문화유산', '행사', '맛집'];
   var LAYER_LABEL = { 숲길: '100대명산', 'BAC+': '명산100+', 산: '산', 종주: '종주 코스' }; // 지도에서는 좌표가 있는 100대 명산만 핀으로 찍힌다
@@ -5193,7 +5204,7 @@
   // ================= 내 주변 (지도 탭 첫 화면) =================
   // 내 위치에서 30km 안의 산(100대명산·BAC·명산100+·그 밖의 산) · 휴양림 · 골프장 · 명소 · 문화유산 · 행사 · 맛집을 한 번에 보여준다.
   var NEAR_KM = 30;
-  var NEAR_CATS = [['산', '100대명산', '#7a6a2f'], ['BAC', 'BAC 명산100', '#d4a017'], ['BAC+', '명산100+', '#b7791f'], ['봉', '그 밖의 산', '#8d7b5a'], ['휴양림', '휴양림', '#3f7d2c'], ['골프', '골프장', '#4d7c0f'], ['종주', '종주 코스', '#0e7490'], ['명소', '명소', '#2e7d57'],
+  var NEAR_CATS = [['산', '100대명산', '#7a6a2f'], ['BAC', 'BAC 명산100', '#d4a017'], ['BAC+', '명산100+', '#b7791f'], ['봉', '그 밖의 산', '#8d7b5a'], ['휴양림', '휴양림', '#3f7d2c'], ['캠핑', '캠핑장', '#2f7d4f'], ['골프', '골프장', '#4d7c0f'], ['종주', '종주 코스', '#0e7490'], ['명소', '명소', '#2e7d57'],
     ['문화유산', '문화유산', '#a8552d'], ['행사', '행사', '#7d4fc4'], ['맛집', '맛집', '#d9651c'], ['내 장소', '내 장소', '#c73a78']];
   var NEAR_MAX = { 명소: 200, 맛집: 150, 행사: 80, 문화유산: 250 };
   state.nearOn = {};
@@ -5201,7 +5212,7 @@
   state.nearFit = true;
   state.nearLoaded = {};
   // 위쪽 단추 → 내 주변에서 켜고 끄는 종류
-  var CHIP_TAGS = { 숲길: ['산', 'BAC'], 'BAC+': ['BAC+'], 산: ['봉'], 종주: ['종주'], 휴양림: ['휴양림'], 골프장: ['골프'], 명소: ['명소'], 문화유산: ['문화유산'], 행사: ['행사'], 맛집: ['맛집'], '내 장소': ['내 장소'] };
+  var CHIP_TAGS = { 숲길: ['산', 'BAC'], 'BAC+': ['BAC+'], 산: ['봉'], 종주: ['종주'], 휴양림: ['휴양림'], 골프장: ['골프'], 캠핑장: ['캠핑'], 명소: ['명소'], 문화유산: ['문화유산'], 행사: ['행사'], 맛집: ['맛집'], '내 장소': ['내 장소'] };
   state.nearMarkers = [];
   // 시·도 대략 범위 [남, 서, 북, 동] — 50km 안에 걸치는 시·도의 문화유산만 받는다
   var AREA_BOX = {
@@ -5436,6 +5447,20 @@
       });
       counts['골프'] = n;
       if (entry.status === 'error') throw new Error('golf');
+    }));
+    // 캠핑장 (한국관광공사 고캠핑 + 한국문화정보원)
+    var campOk = !(guestShare() && !shareTab(guestShare(), 'camp'));
+    if (campOk && want('캠핑')) loaded(['캠핑']);
+    if (campOk && want('캠핑')) group('캠핑장', loadCamps().then(function (data) {
+      if (seq !== state.mapSeq) return;
+      var n = 0;
+      data.items.forEach(function (c) {
+        if (!near(c.y, c.x)) return;
+        var view = campView(c);
+        nearMarker(map, '캠핑장', view, ['캠핑'], LAYER_COLOR['캠핑장'], view.title, '');
+        n++;
+      });
+      counts['캠핑'] = n;
     }));
     if (want('휴양림')) loaded(['휴양림']);
     if (want('휴양림')) group('휴양림', loadItems('휴양림').then(function (entry) {
@@ -7076,13 +7101,13 @@
             '</section>' : '') +
             // 2) 위치 + 내 위치 (100대 명산: 왼쪽 위치, 오른쪽 등산로)
             '<section class="page-sec">' +
-              (view.trailName || view.areaTrails || (view.golf && hasCoord) ?
-              '<h3>' + (view.golf ? '위치 · 코스 보기' : '위치 · 등산로') + '</h3>' +
+              (view.trailName || view.areaTrails || (view.golf && hasCoord) || (view.campSat && hasCoord) ?
+              '<h3>' + (view.golf ? '위치 · 코스 보기' : view.campSat ? '위치 · 주변 위성 지도' : '위치 · 등산로') + '</h3>' +
               // 두 지도의 높이를 같게: 같은 줄(그리드 행)에 놓아 등산로 지도 높이에 위치 지도가 맞춰진다
               '<div class="mtn-maps">' +
                 '<div class="mtn-cap cap-l">위치</div>' +
                 '<div class="detail-map mtn-loc" data-locmap></div>' +
-                '<div class="mtn-cap cap-r">' + (view.golf ? '코스 보기' : view.trailName ? '등산로' : '주변 등산로') + '</div>' +
+                '<div class="mtn-cap cap-r">' + (view.golf ? '코스 보기' : view.campSat ? '주변 위성 지도' : view.trailName ? '등산로' : '주변 등산로') + '</div>' +
                 '<div class="detail-map mtn-trail" data-minimap hidden></div>' +
                 (view.golf ?
                 '<div class="mtn-extra">' +
@@ -7090,6 +7115,11 @@
                   '<div class="wind-info" data-windinfo hidden></div>' +
                   '<div class="copy-hint" data-golfnote>코스 모양을 불러오는 중...</div>' +
                   '<div class="golf-holes" data-golfholes hidden></div>' +
+                '</div>' :
+                view.campSat ?
+                '<div class="mtn-extra">' +
+                  '<div class="chip-row" data-campmode><button type="button" class="chip active" data-cm="sat">🛰 위성 사진</button><button type="button" class="chip" data-cm="map">🗺 일반 지도</button></div>' +
+                  '<div class="copy-hint">' + escapeHtml(view.title || '') + ' 주변을 위성 사진으로 보여 줘요. 지도를 눌러 움직이거나 확대해 사이트 배치·주차장·주변 물가를 살펴보세요.</div>' +
                 '</div>' :
                 '<div class="mtn-extra"><div class="status-line" data-trailmsg>등산로를 불러오는 중...</div><div class="trail-list" data-traillist></div></div>') +
                 (hasCoord ? '<div class="mtn-nav">' + navBoxHtml(view) + '</div>' : '') +
@@ -7492,6 +7522,24 @@
           new naver.maps.Marker({ position: placeLL, map: mini, title: view.title || '' });
         }
         if (view.trailName || view.areaTrails) drawMountain();
+        if (view.campSat) {
+          // 캠핑장: 왼쪽은 위치(넓게), 오른쪽은 캠핑장 주변 위성 사진
+          var cLocBox = sheet.querySelector('[data-locmap]');
+          if (cLocBox) {
+            locMap = new naver.maps.Map(cLocBox, { center: placeLL, zoom: 9, scaleControl: false, mapDataControl: false, zoomControl: false });
+            cLocBox.__map = locMap;
+            guardMap(cLocBox);
+            new naver.maps.Marker({ position: placeLL, map: locMap, title: view.title || '' });
+          }
+          try { mini.setZoom(16); } catch (_) {}
+          setMapSat(mini, true);
+          sheet.querySelectorAll('[data-cm]').forEach(function (b) {
+            b.addEventListener('click', function () {
+              sheet.querySelectorAll('[data-cm]').forEach(function (x) { x.classList.toggle('active', x === b); });
+              setMapSat(mini, b.getAttribute('data-cm') === 'sat');
+            });
+          });
+        }
         if (view.golf) {
           // 골프장: 왼쪽은 위치(넓게), 오른쪽은 위성 사진으로 코스
           var gLocBox = sheet.querySelector('[data-locmap]');
@@ -7504,8 +7552,8 @@
           golfCourseMap(sheet, view, mini, useSrc);
         }
         // 지도 아래에 주변 장소(음식점·편의점·주차장 등) 단추 — 카카오 지도일 때만
-        var extra = (view.trailName || view.areaTrails || view.golf) && sheet.querySelector('.mtn-extra');
-        attachDetailPoi(sheet, extra || box, extra ? (view.golf ? 'beforeend' : 'afterbegin') : 'afterend', function () { return mini; });
+        var extra = (view.trailName || view.areaTrails || view.golf || view.campSat) && sheet.querySelector('.mtn-extra');
+        attachDetailPoi(sheet, extra || box, extra ? ((view.golf || view.campSat) ? 'beforeend' : 'afterbegin') : 'afterend', function () { return mini; });
         return true;
       } catch (err) {
         console.error('[minimap] failed', err);
@@ -8220,7 +8268,7 @@
   ];
   var TOPIC_OF = {
     layer: { 숲길: 'mtn', 종주: 'mtn', 'BAC+': 'mtn', 산: 'mtn', 휴양림: 'forest', 골프장: 'golf', 명소: 'sight', 문화유산: 'heritage', 행사: 'festival', 맛집: 'food' },
-    near: { 산: 'mtn', BAC: 'mtn', 'BAC+': 'mtn', 봉: 'mtn', 종주: 'mtn', 골프: 'golf', 휴양림: 'forest', 명소: 'sight', 문화유산: 'heritage', 행사: 'festival', 맛집: 'food' },
+    near: { 산: 'mtn', BAC: 'mtn', 'BAC+': 'mtn', 봉: 'mtn', 종주: 'mtn', 골프: 'golf', 캠핑: 'camp', 휴양림: 'forest', 명소: 'sight', 문화유산: 'heritage', 행사: 'festival', 맛집: 'food' },
     cat: { 숲길: 'mtn', 둘레길: 'mtn', 휴양림: 'forest', 명소: 'sight', 문화유산: 'heritage', 행사: 'festival', 맛집: 'food' },
     tab: { golf: 'golf', weather: 'weather', gstory: 'gstory', mtn: 'mtn', food: 'food', camp: 'camp' },
   };
@@ -8867,6 +8915,8 @@
     var nVis = Array.prototype.filter.call(document.querySelectorAll('.segmented button'), function (b) { return !b.hidden; }).length;
     document.querySelector('.segmented').style.gridTemplateColumns = 'repeat(' + Math.max(1, nVis) + ', minmax(0, 1fr))';
     // 골프를 공개하지 않으면 지도의 "골프장" 단추도 숨긴다
+    var campChip = document.querySelector('#map-chips [data-layer="캠핑장"]');
+    if (campChip) campChip.hidden = !!(sh && !shareTab(sh, 'camp'));
     var golfChip = document.querySelector('#map-chips [data-layer="골프장"]');
     if (golfChip) golfChip.hidden = !!(sh && !shareTab(sh, 'golf'));
     if (sh && !shareTab(sh, 'golf')) delete state.mapLayers['골프장'];
