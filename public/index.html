@@ -7882,14 +7882,98 @@
   }
   // ----- 운영자: 먹방 유튜버 맛집 기본 목록 넣기 (카카오 장소에서 찾아 확인한 뒤 등록)
   function seedButton(slot, have) {
-    fetch('/data/yt-picks.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    Promise.all([
+      fetch('/data/yt-picks.json').then(function (r) { return r.ok ? r.json() : null; }),
+      gapi('picks?hold=1').then(function (j) { return j.hold || {}; }, function () { return {}; }),
+    ]).then(function (rs) {
+      var j = rs[0], hold = rs[1];
       if (!j || !slot.isConnected) return;
       var done = {}; have.forEach(function (p) { if (p.seed) done[p.seed] = 1; });
-      var left = (j.items || []).filter(function (s) { return !done[s.seed]; });
-      if (!left.length) return;
-      slot.innerHTML = '<button type="button" class="link-btn" style="margin:6px 0 0">📺 유튜버 맛집 기본 목록 넣기 (' + left.length + '곳 남음)</button>';
-      slot.firstChild.addEventListener('click', function () { openSeedImport(left); });
+      var rest = (j.items || []).filter(function (s) { return !done[s.seed]; });
+      var left = rest.filter(function (s) { return !hold[s.seed]; });
+      var held = rest.filter(function (s) { return hold[s.seed] && hold[s.seed].st === 'hold'; });
+      var html = '';
+      if (left.length) html += '<button type="button" class="link-btn" style="margin:6px 8px 0 0" data-sd="left">📺 유튜버 맛집 기본 목록 넣기 (' + left.length + '곳 남음)</button>';
+      if (held.length) html += '<button type="button" class="link-btn" style="margin:6px 0 0" data-sd="held">🔎 나중에 확인할 곳 (' + held.length + '곳)</button>';
+      slot.innerHTML = html;
+      slot.querySelectorAll('[data-sd]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (b.getAttribute('data-sd') === 'left') openSeedImport(left); else openSeedHold(held, hold);
+        });
+      });
     }).catch(function () {});
+  }
+  function saveSeedHold(list) {
+    if (!list.length) return Promise.resolve();
+    return gapi('picks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'hold', seeds: list }) }).catch(function () {});
+  }
+  function seedPickBody(s, r) {
+    return Object.assign(placeFromKakao(r), { seed: s.seed, video: s.video || '', youtuber: s.youtuber, show: s.show || '', menu: s.menu, review: s.review || '', src: s.src || '' });
+  }
+  // ----- 운영자: 지도에서 못 찾았거나 고르지 않아 남겨 둔 유튜버 맛집 → 직접 찾아 등록하거나 빼기
+  function openSeedHold(seeds, hold) {
+    var WHY = { notfound: '지도에서 못 찾음', skip: '체크하지 않음' };
+    var sheet = el('<div class="sheet-backdrop"><div class="sheet"><div class="sheet-head"><h2>🔎 나중에 확인할 곳</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div>' +
+      '<div class="admin-note">기본 목록을 넣을 때 카카오 지도에서 <b>찾지 못했거나 체크하지 않은 곳</b>이에요. <b>찾기</b>로 검색어를 바꿔 가며 찾고, 맞는 가게를 누르면 바로 등록돼요. 없어진 가게나 필요 없는 곳은 <b>빼기</b>를 누르세요.</div>' +
+      '<div class="seed-list" data-hl></div></div></div>');
+    $('sheet-root').appendChild(sheet);
+    var changed = false;
+    function close() { sheet.remove(); if (changed) refreshPicksViews(); }
+    sheet.querySelector('[data-close]').addEventListener('click', close);
+    var listBox = sheet.querySelector('[data-hl]');
+    function paintEmpty() { if (!listBox.children.length) listBox.innerHTML = '<div class="copy-hint">남은 곳이 없어요. 모두 확인했어요!</div>'; }
+    seeds.forEach(function (s) {
+      var h0 = hold[s.seed] || {};
+      var row = el('<div class="seed-row" style="flex-direction:column;align-items:stretch">' +
+        '<span><b>' + escapeHtml(s.name) + '</b> <small>📺 ' + escapeHtml(s.youtuber + (s.show ? ' · ' + s.show : '')) + ' · ' + escapeHtml(s.menu || '') + '</small>' +
+        (s.review ? '<small>' + escapeHtml(s.review) + '</small>' : '') +
+        '<small>' + escapeHtml(WHY[h0.why] || '나중에 확인') + (s.hint ? ' · 지역: ' + escapeHtml(s.hint) : '') +
+        ' · <a href="https://map.kakao.com/?q=' + encodeURIComponent(s.q || s.name) + '" target="_blank" rel="noopener">카카오맵에서 보기</a>' +
+        (s.video ? ' · <a href="' + escapeHtml(s.video) + '" target="_blank" rel="noopener">' + (isChannel(s.video) ? '채널' : '영상') + '</a>' : '') + '</small></span>' +
+        '<div class="share-row" style="margin-top:6px"><input data-hq maxlength="50" value="' + escapeHtml(s.q || s.name) + '"><button type="button" class="link-btn" style="margin:0" data-hfind>찾기</button><button type="button" class="link-btn" style="margin:0" data-hdrop>빼기</button></div>' +
+        '<div class="pick-results" data-hres></div></div>');
+      listBox.appendChild(row);
+      var qIn = row.querySelector('[data-hq]'), res = row.querySelector('[data-hres]');
+      function find() {
+        var q = qIn.value.trim();
+        if (q.length < 2) { res.innerHTML = '<div class="copy-hint">두 글자 이상 적어 주세요.</div>'; return; }
+        res.innerHTML = '<div class="status-line">찾는 중...</div>';
+        kakaoSearch(q).then(function (list) {
+          if (!list.length) { res.innerHTML = '<div class="copy-hint">찾지 못했어요. 가게 이름만, 또는 "이름 + 동네"로 바꿔 찾아보세요.</div>'; return; }
+          res.innerHTML = '';
+          list.slice(0, 8).forEach(function (r) {
+            var b = el('<button type="button" class="pick-res"><b>' + escapeHtml(r.place_name) + '</b><small>' + escapeHtml([String(r.category_name || '').split(' > ').slice(-1)[0], r.road_address_name || r.address_name].filter(Boolean).join(' · ')) + '</small><small>👉 이 곳으로 등록</small></button>');
+            b.addEventListener('click', function () {
+              if (b.getAttribute('data-sure') !== '1') { b.setAttribute('data-sure', '1'); b.lastChild.textContent = '✅ 한 번 더 누르면 등록돼요'; return; }
+              b.disabled = true; b.lastChild.textContent = '등록하는 중...';
+              gapi('picks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(seedPickBody(s, r)) }).then(function () {
+                done('등록했어요');
+              }, function (e) {
+                if (e.status === 409) { saveSeedHold([{ seed: s.seed, st: 'drop', why: 'dup' }]); done('이미 등록된 가게라 목록에서 뺐어요'); }
+                else { b.disabled = false; b.lastChild.textContent = '등록하지 못했어요. 다시 눌러 보세요'; b.removeAttribute('data-sure'); }
+              });
+            });
+            res.appendChild(b);
+          });
+        });
+      }
+      function done(text) {
+        changed = true;
+        saveSeedHold([{ seed: s.seed, st: '' }]).then(function () {});
+        row.innerHTML = '<small>✅ ' + escapeHtml(s.name) + ' — ' + escapeHtml(text) + '</small>';
+        setTimeout(function () { row.remove(); paintEmpty(); }, 1500);
+      }
+      row.querySelector('[data-hfind]').addEventListener('click', find);
+      qIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); find(); } });
+      var drop = row.querySelector('[data-hdrop]');
+      drop.addEventListener('click', function () {
+        if (drop.getAttribute('data-sure') !== '1') { drop.setAttribute('data-sure', '1'); drop.textContent = '정말 빼기'; return; }
+        changed = true;
+        saveSeedHold([{ seed: s.seed, st: 'drop', why: 'owner' }]);
+        row.remove(); paintEmpty();
+      });
+    });
+    paintEmpty();
   }
   function kakaoPlaces() {
     return loadNaver().catch(function () {}).then(function () {
@@ -7910,7 +7994,7 @@
   }
   function openSeedImport(seeds) {
     var sheet = el('<div class="sheet-backdrop"><div class="sheet"><div class="sheet-head"><h2>📺 유튜버 맛집 기본 목록</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div>' +
-      '<div class="admin-note">먹방 유튜버가 방문·소개한 가게를 카카오 지도에서 찾았어요. <b>가게 이름·주소가 맞는지 보고</b> 맞는 것만 체크한 채 등록하세요. 체크가 꺼진 곳은 자동으로 확신하지 못한 곳이에요(다른 지점·동명 가게일 수 있음). 유튜버와 관계없는 비공식 정보로, 원래 영상 주소만 함께 남겨요.</div>' +
+      '<div class="admin-note">먹방 유튜버가 방문·소개한 가게를 카카오 지도에서 찾았어요. <b>가게 이름·주소가 맞는지 보고</b> 맞는 것만 체크한 채 등록하세요. 체크가 꺼진 곳은 자동으로 확신하지 못한 곳이에요(다른 지점·동명 가게일 수 있음). <b>찾지 못했거나 체크하지 않은 곳은 「🔎 나중에 확인할 곳」에 남아</b> 나중에 직접 찾아 등록할 수 있어요. 유튜버와 관계없는 비공식 정보로, 원래 영상 주소만 함께 남겨요.</div>' +
       '<div class="seed-list" data-sl><div class="status-line">카카오 지도에서 찾는 중...</div></div>' +
       '<div class="status-line" data-smsg hidden></div>' +
       '<button type="button" class="primary-btn" data-sgo disabled>체크한 곳 등록</button></div></div>');
@@ -7918,7 +8002,7 @@
     function close() { sheet.remove(); }
     sheet.querySelector('[data-close]').addEventListener('click', close);
     var listBox = sheet.querySelector('[data-sl]'), go = sheet.querySelector('[data-sgo]'), msg = sheet.querySelector('[data-smsg]');
-    var rows = [];
+    var rows = [], finished = false;
     (async function () {
       for (var i = 0; i < seeds.length; i++) {
         var s = seeds[i];
@@ -7944,20 +8028,27 @@
       listBox.addEventListener('change', count); count();
     })();
     go.addEventListener('click', async function () {
-      var picks = Array.prototype.map.call(listBox.querySelectorAll('input:checked'), function (c) { return rows[Number(c.getAttribute('data-k'))]; });
+      if (finished) { close(); return; }
+      var checked = {}, later = [];
+      Array.prototype.forEach.call(listBox.querySelectorAll('input:checked'), function (c) { checked[Number(c.getAttribute('data-k'))] = 1; });
+      var picks = rows.filter(function (x, i) { return checked[i]; });
       go.disabled = true;
       var ok = 0, dup = 0, fail = 0;
       for (var i = 0; i < picks.length; i++) {
         var x = picks[i];
         go.textContent = '등록하는 중... (' + (i + 1) + '/' + picks.length + ')';
-        var body = Object.assign(placeFromKakao(x.r), { seed: x.s.seed, video: x.s.video, youtuber: x.s.youtuber, show: x.s.show || '', menu: x.s.menu, review: x.s.review || '', src: x.s.src || '' });
-        try { await gapi('picks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); ok++; }
-        catch (e) { if (e.status === 409) dup++; else fail++; }
+        try { await gapi('picks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(seedPickBody(x.s, x.r)) }); ok++; }
+        catch (e) { if (e.status === 409) { dup++; later.push({ seed: x.s.seed, st: 'drop', why: 'dup' }); } else fail++; }
       }
+      // 찾지 못한 곳·체크하지 않은 곳은 '나중에 확인할 곳'으로
+      rows.forEach(function (x, i) { if (!checked[i]) later.push({ seed: x.s.seed, st: 'hold', why: x.r ? 'skip' : 'notfound' }); });
+      var heldN = later.filter(function (x) { return x.st === 'hold'; }).length;
+      go.textContent = '정리하는 중...';
+      await saveSeedHold(later);
       msg.hidden = false;
-      msg.textContent = ok + '곳을 등록했어요' + (dup ? ' · 이미 있던 곳 ' + dup : '') + (fail ? ' · 실패 ' + fail : '') + '.';
+      msg.textContent = ok + '곳을 등록했어요' + (dup ? ' · 이미 있던 곳 ' + dup : '') + (fail ? ' · 실패 ' + fail : '') + (heldN ? ' · 나중에 확인할 곳 ' + heldN : '') + '.';
       go.textContent = '닫기'; go.disabled = false;
-      go.onclick = close;
+      finished = true;
       refreshPicksViews();
     });
   }

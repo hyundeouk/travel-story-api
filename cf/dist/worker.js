@@ -4652,6 +4652,10 @@ var picks_default = async (req, context) => {
     return { ...rest, mine: isMine(p) };
   };
   try {
+    if (req.method === "GET" && new URL(req.url).searchParams.get("hold")) {
+      if (!isOwner) return jsonResponse({ error: "edit not allowed" }, { status: 403 });
+      return jsonResponse({ ok: true, hold: await s.get("seedhold", { type: "json" }).catch(() => null) || {} });
+    }
     if (req.method === "GET") {
       const { blobs } = await s.list({ prefix: "p-" });
       const all = (await Promise.all(blobs.map((b) => s.get(b.key, { type: "json" }).catch(() => null)))).filter(Boolean);
@@ -4663,8 +4667,22 @@ var picks_default = async (req, context) => {
       return jsonResponse({ items, count: items.length });
     }
     if (req.method === "POST" && !id) {
+      const input = await req.json();
+      if (input?.action === "hold") {
+        if (!isOwner) return jsonResponse({ error: "edit not allowed" }, { status: 403 });
+        const hold = await s.get("seedhold", { type: "json" }).catch(() => null) || {};
+        const now2 = (/* @__PURE__ */ new Date()).toISOString();
+        for (const x of Array.isArray(input.seeds) ? input.seeds.slice(0, 400) : []) {
+          const seed = String(x?.seed || "");
+          if (!/^[a-z0-9-]{1,20}$/.test(seed)) continue;
+          if (x.st === "hold" || x.st === "drop") hold[seed] = { st: x.st, why: str6(x.why, 20), at: now2 };
+          else delete hold[seed];
+        }
+        await s.setJSON("seedhold", hold);
+        return jsonResponse({ ok: true, hold });
+      }
       if (!isOwner && !acct && !author) return jsonResponse({ error: "author key required" }, { status: 400 });
-      const body = clean3(await req.json());
+      const body = clean3(input);
       if (!body.name || body.lat == null || !body.kakaoId) return jsonResponse({ error: "pick a place" }, { status: 400 });
       const { blobs } = await s.list({ prefix: "p-" });
       for (const b of blobs) {

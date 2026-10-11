@@ -9,6 +9,8 @@ import { jsonResponse, corsPreflightResponse } from '../../src/lib/govApi.mts';
 //   POST   /api/picks            등록 (주인 → 바로 공개, 손님 → 확인 대기)
 //   PUT    /api/picks/:id        고치기 (주인 또는 올린 손님) · 주인은 { status } 로 공개/숨김/확인 대기
 //   DELETE /api/picks/:id        지우기 (주인 또는 올린 손님)
+//   GET    /api/picks?hold=1     주인만: 유튜버 맛집 기본 목록 중 '나중에 확인' · '뺀 곳' 표시
+//   POST   /api/picks {action:'hold', seeds:[{seed, st:'hold'|'drop'|''}]}  주인만: 위 표시 바꾸기
 // 유튜버 정보는 "어느 영상에 나왔다"는 사실과 원래 영상 주소만 둔다(영상·썸네일·글을 복사하지 않는다).
 const store = () => getStore({ name: 'picks', consistency: 'strong' });
 const gphotos = () => getStore({ name: 'gphotos', consistency: 'strong' });
@@ -93,6 +95,11 @@ export default async (req: Request, context: Context) => {
   const strip = (p: any) => { const { author: _a, ...rest } = p; return { ...rest, mine: isMine(p) }; };
 
   try {
+    if (req.method === 'GET' && new URL(req.url).searchParams.get('hold')) {
+      if (!isOwner) return jsonResponse({ error: 'edit not allowed' }, { status: 403 });
+      return jsonResponse({ ok: true, hold: ((await s.get('seedhold', { type: 'json' }).catch(() => null)) as any) || {} });
+    }
+
     if (req.method === 'GET') {
       const { blobs } = await s.list({ prefix: 'p-' });
       const all = (await Promise.all(blobs.map((b) => s.get(b.key, { type: 'json' }).catch(() => null)))).filter(Boolean) as any[];
@@ -106,8 +113,23 @@ export default async (req: Request, context: Context) => {
     }
 
     if (req.method === 'POST' && !id) {
+      const input: any = await req.json();
+      // 운영자: 기본 목록에서 지도에서 못 찾았거나 고르지 않은 곳을 '나중에 확인'으로 남기기
+      if (input?.action === 'hold') {
+        if (!isOwner) return jsonResponse({ error: 'edit not allowed' }, { status: 403 });
+        const hold: Record<string, any> = ((await s.get('seedhold', { type: 'json' }).catch(() => null)) as any) || {};
+        const now = new Date().toISOString();
+        for (const x of Array.isArray(input.seeds) ? input.seeds.slice(0, 400) : []) {
+          const seed = String(x?.seed || '');
+          if (!/^[a-z0-9-]{1,20}$/.test(seed)) continue;
+          if (x.st === 'hold' || x.st === 'drop') hold[seed] = { st: x.st, why: str(x.why, 20), at: now };
+          else delete hold[seed];
+        }
+        await s.setJSON('seedhold', hold);
+        return jsonResponse({ ok: true, hold });
+      }
       if (!isOwner && !acct && !author) return jsonResponse({ error: 'author key required' }, { status: 400 });
-      const body = clean(await req.json());
+      const body = clean(input);
       if (!body.name || body.lat == null || !body.kakaoId) return jsonResponse({ error: 'pick a place' }, { status: 400 });
       // 같은 가게(카카오 장소 번호)가 이미 있으면 새로 만들지 않는다
       const { blobs } = await s.list({ prefix: 'p-' });
