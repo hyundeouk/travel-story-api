@@ -89,7 +89,7 @@ function deny(status: number, error: string): Response {
 // ---------- 공개 범위 (공유 링크로 들어온 손님에게 무엇을 보여줄지) ----------
 export interface ShareSettings {
   // feed(내 여행 기록)·mine(내 장소)은 주인만 보는 화면이라 손님에게는 늘 false
-  tabs: { feed: boolean; map: boolean; golf: boolean; weather: boolean; browse: boolean; food: boolean; gstory: boolean; mine: boolean };
+  tabs: { feed: boolean; map: boolean; golf: boolean; weather: boolean; browse: boolean; food: boolean; camp: boolean; gstory: boolean; mine: boolean };
   marks: boolean;         // 내 기록(다녀옴·별점·한 줄 평)
   storyMemo: boolean;     // 스토리 글
   storyLocation: boolean; // 스토리 위치(지도 핀·좌표)
@@ -97,7 +97,7 @@ export interface ShareSettings {
   guestApproval: boolean; // 손님이 쓴 "스토리" 글을 주인이 확인한 뒤 공개
 }
 export const DEFAULT_SHARE: ShareSettings = {
-  tabs: { feed: false, map: true, golf: true, weather: true, browse: true, food: true, gstory: true, mine: false },
+  tabs: { feed: false, map: true, golf: true, weather: true, browse: true, food: true, camp: true, gstory: true, mine: false },
   marks: true, storyMemo: true, storyLocation: true, hiddenStories: [], guestApproval: false,
 };
 export function normalizeShare(v: any): ShareSettings {
@@ -106,7 +106,7 @@ export function normalizeShare(v: any): ShareSettings {
   const ids = Array.isArray(v?.hiddenStories) ? v.hiddenStories.filter((x: any) => typeof x === 'string' && x.length <= 80).slice(0, 5000) : [];
   return {
     // 골프·날씨는 나중에 생긴 탭: 저장된 값이 없으면 예전처럼 골프는 "둘러보기", 날씨는 "지도" 설정을 따른다
-    tabs: { feed: false, map: b(t.map, true), golf: b(t.golf, b(t.browse, true)), weather: b(t.weather, b(t.map, true)), browse: b(t.browse, true), food: b(t.food, true), gstory: b(t.gstory, true), mine: false },
+    tabs: { feed: false, map: b(t.map, true), golf: b(t.golf, b(t.browse, true)), weather: b(t.weather, b(t.map, true)), browse: b(t.browse, true), food: b(t.food, true), camp: b(t.camp, true), gstory: b(t.gstory, true), mine: false },
     marks: b(v?.marks, true), storyMemo: b(v?.storyMemo, true), storyLocation: b(v?.storyLocation, true),
     hiddenStories: Array.from(new Set(ids)),
     guestApproval: b(v?.guestApproval, false),
