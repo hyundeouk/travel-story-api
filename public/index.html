@@ -508,6 +508,26 @@
   .pick-res, .pick-chosen { display: flex; flex-direction: column; text-align: left; border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
   .pick-chosen { cursor: default; border-color: var(--accent); gap: 2px; } .pick-res small, .pick-chosen small { color: var(--ink-dim); font-size: 12px; }
   .pk-yt { margin: 4px 0 12px; } .pk-yt summary { cursor: pointer; font-weight: 700; font-size: 0.9rem; margin-bottom: 8px; }
+  #print-root { display: none; }
+  @media print {
+    @page { size: A4 portrait; margin: 10mm; }
+    body > *:not(#print-root) { display: none !important; }
+    body { background: #fff !important; }
+    #print-root { display: block; color: #000; font-size: 9.5pt; }
+    #print-root h1 { font-size: 14pt; margin: 0 0 2mm; }
+    #print-root .pr-sub { margin: 0 0 3mm; color: #444; font-size: 8.5pt; }
+    #print-root table { width: 100%; border-collapse: collapse; }
+    #print-root thead { display: table-header-group; }
+    #print-root th { background: #eee; font-size: 8.5pt; }
+    #print-root th, #print-root td { border: 0.6pt solid #999; padding: 1.4mm 1.6mm; vertical-align: top; text-align: left; }
+    #print-root tr { break-inside: avoid; }
+    #print-root td small { display: block; color: #555; font-size: 7.5pt; }
+    #print-root td.pr-box span { display: block; width: 4.5mm; height: 4.5mm; border: 1pt solid #000; margin: 0.5mm auto; }
+    #print-root td.pr-memo { width: 30mm; }
+    #print-root th:nth-child(1), #print-root th:nth-child(2), #print-root th:nth-child(7), #print-root th:nth-child(8), #print-root td:nth-child(7), #print-root td:nth-child(8) { white-space: nowrap; }
+    #print-root td:nth-child(4) { width: 20mm; }
+    #print-root a { color: #0645ad; }
+  }
   .seed-list { display: flex; flex-direction: column; gap: 6px; max-height: 55vh; overflow-y: auto; margin: 10px 0; }
   .seed-row { display: flex; gap: 8px; align-items: flex-start; border: 1px solid var(--line); border-radius: 10px; padding: 7px 9px; }
   .seed-row.none { opacity: 0.6; } .seed-row span { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .seed-row small { color: var(--ink-dim); font-size: 12px; }
@@ -7910,11 +7930,34 @@
   function seedPickBody(s, r) {
     return Object.assign(placeFromKakao(r), { seed: s.seed, video: s.video || '', youtuber: s.youtuber, show: s.show || '', menu: s.menu, review: s.review || '', src: s.src || '' });
   }
+  // ----- '나중에 확인할 곳'을 체크할 수 있는 점검표로 인쇄 → 'PDF로 저장'
+  function printSeedChecklist(seeds, hold) {
+    var WHY = { notfound: '못 찾음', skip: '체크 안 함' };
+    var list = seeds.slice().sort(function (a, b) { return String(a.hint || 'ㅎ').localeCompare(String(b.hint || 'ㅎ'), 'ko') || String(a.name).localeCompare(String(b.name), 'ko'); });
+    var d = new Date(), day = d.getFullYear() + '.' + (d.getMonth() + 1) + '.' + d.getDate();
+    var old = document.getElementById('print-root'); if (old) old.remove();
+    var root = el('<div id="print-root"><h1>유튜버 맛집 · 나중에 확인할 곳 점검표</h1>' +
+      '<p class="pr-sub">' + day + ' · ' + list.length + '곳 · 지역순 · 「지도」를 누르면 카카오맵에서 찾아봐요. 확인한 곳은 □에 체크하고, 고칠 이름·주소는 메모 칸에 적어 두세요.</p>' +
+      '<table><thead><tr><th>확인</th><th>#</th><th>가게</th><th>유튜버</th><th>메뉴</th><th>지역 · 찾은 말</th><th>이유</th><th>지도</th><th>메모</th></tr></thead><tbody>' +
+      list.map(function (s, i) {
+        var hw = (hold[s.seed] || {}).why;
+        return '<tr><td class="pr-box"><span></span></td><td>' + (i + 1) + '</td><td><b>' + escapeHtml(s.name) + '</b>' + (s.review ? '<small>' + escapeHtml(s.review) + '</small>' : '') + '</td>' +
+          '<td>' + escapeHtml(s.youtuber + (s.show ? ' · ' + s.show : '')) + '</td><td>' + escapeHtml(s.menu || '') + '</td>' +
+          '<td>' + escapeHtml(s.hint || '-') + '<small>' + escapeHtml(s.q || '') + '</small></td><td>' + escapeHtml(WHY[hw] || '확인') + '</td>' +
+          '<td><a href="https://map.kakao.com/?q=' + encodeURIComponent(s.q || s.name) + '">지도</a></td><td class="pr-memo"></td></tr>';
+      }).join('') + '</tbody></table></div>');
+    document.body.appendChild(root);
+    var title = document.title; document.title = '유튜버맛집_점검표_' + day.replace(/\./g, '-');
+    function done() { document.title = title; root.remove(); window.removeEventListener('afterprint', done); }
+    window.addEventListener('afterprint', done);
+    setTimeout(function () { try { window.print(); } catch (e) { done(); } }, 50);
+  }
   // ----- 운영자: 지도에서 못 찾았거나 고르지 않아 남겨 둔 유튜버 맛집 → 직접 찾아 등록하거나 빼기
   function openSeedHold(seeds, hold) {
     var WHY = { notfound: '지도에서 못 찾음', skip: '체크하지 않음' };
     var sheet = el('<div class="sheet-backdrop"><div class="sheet"><div class="sheet-head"><h2>🔎 나중에 확인할 곳</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div>' +
       '<div class="admin-note">기본 목록을 넣을 때 카카오 지도에서 <b>찾지 못했거나 체크하지 않은 곳</b>이에요. <b>찾기</b>로 검색어를 바꿔 가며 찾고, 맞는 가게를 누르면 바로 등록돼요. 없어진 가게나 필요 없는 곳은 <b>빼기</b>를 누르세요.</div>' +
+      '<button type="button" class="link-btn" style="margin:0 0 4px" data-hprint>📄 점검표 PDF로 내보내기</button>' +
       '<div class="seed-list" data-hl></div></div></div>');
     $('sheet-root').appendChild(sheet);
     var changed = false;
@@ -7922,6 +7965,8 @@
     sheet.querySelector('[data-close]').addEventListener('click', close);
     var listBox = sheet.querySelector('[data-hl]');
     function paintEmpty() { if (!listBox.children.length) listBox.innerHTML = '<div class="copy-hint">남은 곳이 없어요. 모두 확인했어요!</div>'; }
+    var remain = seeds.slice();
+    sheet.querySelector('[data-hprint]').addEventListener('click', function () { printSeedChecklist(remain, hold); });
     seeds.forEach(function (s) {
       var h0 = hold[s.seed] || {};
       var row = el('<div class="seed-row" style="flex-direction:column;align-items:stretch">' +
@@ -7960,6 +8005,7 @@
       function done(text) {
         changed = true;
         saveSeedHold([{ seed: s.seed, st: '' }]).then(function () {});
+        remain = remain.filter(function (x) { return x !== s; });
         row.innerHTML = '<small>✅ ' + escapeHtml(s.name) + ' — ' + escapeHtml(text) + '</small>';
         setTimeout(function () { row.remove(); paintEmpty(); }, 1500);
       }
@@ -7970,6 +8016,7 @@
         if (drop.getAttribute('data-sure') !== '1') { drop.setAttribute('data-sure', '1'); drop.textContent = '정말 빼기'; return; }
         changed = true;
         saveSeedHold([{ seed: s.seed, st: 'drop', why: 'owner' }]);
+        remain = remain.filter(function (x) { return x !== s; });
         row.remove(); paintEmpty();
       });
     });
