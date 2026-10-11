@@ -4904,7 +4904,7 @@
         pn++;
       });
       [['명소', j.attractions], ['맛집', j.restaurants], ['행사', j.festivals]].filter(function (pair) { return prefOn('near', pair[0]); }).forEach(function (pair) {
-        var cat = pair[0], list = sortNear(pair[1] || [], function (it) { return [Number(it.mapY), Number(it.mapX)]; }).slice(0, NEAR_MAX[cat]);
+        var cat = pair[0], list = sortNear((pair[1] || []).filter(function (it) { return cat !== '맛집' || !isPickDup(it, rs[1]); }), function (it) { return [Number(it.mapY), Number(it.mapX)]; }).slice(0, NEAR_MAX[cat]);
         var n = 0;
         list.forEach(function (it) {
           var view = placeViewFor(cat, it);
@@ -7712,6 +7712,17 @@
     return picksCache.p;
   }
   function isYt(p) { return !!(p.video || p.youtuber); }
+  // 추천 맛집과 같은 가게(이름이 같고 300m 안)면 주변 맛집 목록에서 한 번만 보이게
+  function pickNameKey(s) { return String(s || '').replace(/\(.*?\)|\[.*?\]/g, '').replace(/본점|[\s·.,&-]/g, '').toLowerCase(); }
+  function isPickDup(it, picks) {
+    var la = Number(it.mapY), lo = Number(it.mapX), k = pickNameKey(it.title);
+    if (!la || !lo || k.length < 2) return false;
+    return (picks || []).some(function (p) {
+      if (p.lat == null) return false;
+      var pk = pickNameKey(p.name);
+      return pk.length >= 2 && (pk.indexOf(k) >= 0 || k.indexOf(pk) >= 0) && distKm(la, lo, p.lat, p.lng) < 0.3;
+    });
+  }
   function isChannel(u) { return /youtube\.com\/@/.test(u || ''); }
   function pickBy(p) { return p.byOwner ? '운영자' : (p.by || '게스트'); }
   function pickBadge(p) { return isYt(p) ? '📺 ' + (p.youtuber || '유튜버') + (p.show ? ' · ' + p.show : '') : p.byOwner ? '⭐ 운영자 추천' : '👥 게스트 추천'; }
@@ -7754,9 +7765,10 @@
       pos = pos || state.nearPos || geo.pos;
       if (!pos) { list.innerHTML = '<div class="empty-state"><strong>내 위치를 알 수 없어요</strong>위치 사용을 허용하면 주변 맛집을 가까운 순으로 보여 드려요.</div>'; note.textContent = ''; return; }
       note.textContent = '불러오는 중...';
-      return api('nearby?lat=' + pos.lat.toFixed(5) + '&lng=' + pos.lng.toFixed(5)).then(function (j) {
+      return Promise.all([api('nearby?lat=' + pos.lat.toFixed(5) + '&lng=' + pos.lng.toFixed(5)), loadPicks().catch(function () { return []; })]).then(function (rs) {
+        var j = rs[0];
         if (seq !== foodSeq) return;
-        var items = (j.restaurants || []).map(function (it) { var la = Number(it.mapY), lo = Number(it.mapX); return { it: it, d: la && lo ? distKm(pos.lat, pos.lng, la, lo) : 1e9 }; })
+        var items = (j.restaurants || []).filter(function (it) { return !isPickDup(it, rs[1]); }).map(function (it) { var la = Number(it.mapY), lo = Number(it.mapX); return { it: it, d: la && lo ? distKm(pos.lat, pos.lng, la, lo) : 1e9 }; })
           .filter(function (x) { return x.d <= 40; }).sort(function (a, b) { return a.d - b.d; }).map(function (x) { return x.it; });
         note.textContent = items.length + '곳 · 가까운 순';
         list.innerHTML = '';
@@ -7912,6 +7924,7 @@
         var s = seeds[i];
         var res = await kakaoSearch(s.q);
         var food = res.filter(function (r) { return r.category_group_code === 'FD6' || r.category_group_code === 'CE7'; });
+        if (!food.length) food = res; // 시장·수산시장처럼 음식점 분류가 아닌 곳
         var core = String(s.name).replace(/\s+/g, '');
         var named = food.filter(function (r) { return String(r.place_name).replace(/\s+/g, '').indexOf(core) >= 0; });
         var hinted = s.hint ? named.filter(function (r) { return (r.road_address_name + ' ' + r.address_name).indexOf(s.hint) >= 0; }) : [];
@@ -7925,7 +7938,7 @@
         return '<label class="seed-row' + (r ? '' : ' none') + '"><input type="checkbox" data-k="' + i + '"' + (x.sure ? ' checked' : '') + (r ? '' : ' disabled') + '>' +
           '<span><b>' + escapeHtml(s.name) + '</b> <small>📺 ' + escapeHtml(s.youtuber + (s.show ? ' · ' + s.show : '')) + ' · ' + escapeHtml(s.menu) + '</small>' +
           (r ? '<small>→ ' + escapeHtml(r.place_name) + ' · ' + escapeHtml(r.road_address_name || r.address_name) + (x.sure ? '' : ' <b style="color:var(--danger)">(확인 필요)</b>') + '</small>' : '<small style="color:var(--danger)">카카오 지도에서 찾지 못했어요</small>') +
-          '<small><a href="' + escapeHtml(s.video) + '" target="_blank" rel="noopener">' + (isChannel(s.video) ? '채널' : '영상') + ' 보기</a>' + (s.src ? ' · <a href="' + escapeHtml(s.src) + '" target="_blank" rel="noopener">출처 기사</a>' : '') + (r && r.place_url ? ' · <a href="' + escapeHtml(r.place_url) + '" target="_blank" rel="noopener">카카오맵</a>' : '') + '</small></span></label>';
+          '<small>' + (s.review ? escapeHtml(s.review) + '<br>' : '') + (s.video ? '<a href="' + escapeHtml(s.video) + '" target="_blank" rel="noopener">' + (isChannel(s.video) ? '채널' : '영상') + ' 보기</a>' : '') + (s.src ? ' · <a href="' + escapeHtml(s.src) + '" target="_blank" rel="noopener">출처 기사</a>' : '') + (r && r.place_url ? ' · <a href="' + escapeHtml(r.place_url) + '" target="_blank" rel="noopener">카카오맵</a>' : '') + '</small></span></label>';
       }).join('');
       function count() { var n = listBox.querySelectorAll('input:checked').length; go.disabled = !n; go.textContent = n ? '체크한 ' + n + '곳 등록' : '체크한 곳 등록'; }
       listBox.addEventListener('change', count); count();
@@ -7937,7 +7950,7 @@
       for (var i = 0; i < picks.length; i++) {
         var x = picks[i];
         go.textContent = '등록하는 중... (' + (i + 1) + '/' + picks.length + ')';
-        var body = Object.assign(placeFromKakao(x.r), { seed: x.s.seed, video: x.s.video, youtuber: x.s.youtuber, show: x.s.show || '', menu: x.s.menu, src: x.s.src || '' });
+        var body = Object.assign(placeFromKakao(x.r), { seed: x.s.seed, video: x.s.video, youtuber: x.s.youtuber, show: x.s.show || '', menu: x.s.menu, review: x.s.review || '', src: x.s.src || '' });
         try { await gapi('picks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); ok++; }
         catch (e) { if (e.status === 409) dup++; else fail++; }
       }
