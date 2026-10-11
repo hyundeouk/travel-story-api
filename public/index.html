@@ -509,6 +509,9 @@
   .pick-chosen { cursor: default; border-color: var(--accent); gap: 2px; } .pick-res small, .pick-chosen small { color: var(--ink-dim); font-size: 12px; }
   .pk-yt { margin: 4px 0 12px; } .pk-yt summary { cursor: pointer; font-weight: 700; font-size: 0.9rem; margin-bottom: 8px; }
   .fix-sec .chip-row { margin-top: 6px; }
+  .pd-info-btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .pd-info-btns .link-btn { margin: 0; }
+  .link-btn.fx-red, .chip.fx-red { background: #c62828; border-color: #c62828; color: #fff; }
   .fix-form { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-top: 8px; }
   .fix-form .field { margin-bottom: 8px; }
   .fix-row { border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; margin: 6px 0; display: flex; flex-direction: column; gap: 6px; }
@@ -3269,7 +3272,7 @@
     } else {
       html = '<h3>⚠ 정보가 틀렸나요?</h3>' +
         '<div class="copy-hint">폐업, 바뀐 전화번호·영업시간, 잘못된 위치 등을 알려 주시면 운영자가 확인하고 고칠게요.</div>' +
-        '<div class="chip-row"><button type="button" class="chip" data-fx="report">⚠ 정보 오류 알리기</button></div>' +
+        '<div class="chip-row"><button type="button" class="chip fx-red" data-fx="report">⚠ 정보 오류 알리기</button></div>' +
         '<div data-fxbox></div>';
     }
     var sec = el('<section class="page-sec fix-sec">' + html + '</section>');
@@ -3277,6 +3280,21 @@
     if (!body) return;
     body.appendChild(sec);
     var box = sec.querySelector('[data-fxbox]');
+    // 기본 정보 아래(전화번호 복사 오른쪽)에도 같은 단추 — 누르면 맨 아래 단추를 누른 것과 같다
+    var info = sheet.querySelector('.pd-info');
+    if (info) {
+      var tb = info.querySelector('[data-copytel]');
+      var holder = tb ? tb.parentNode : null;
+      if (!holder) { holder = el('<div></div>'); info.appendChild(holder); }
+      holder.classList.add('pd-info-btns');
+      var quick = el('<button type="button" class="link-btn fx-red" data-fxquick>' + (owner ? '✏️ 정보 고치기' : '⚠ 정보 수정 요청') + '</button>');
+      holder.appendChild(quick);
+      quick.addEventListener('click', function () {
+        var target = sec.querySelector(owner ? '[data-fx="edit"]' : '[data-fx="report"]');
+        if (target) target.click();
+        sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
     sec.addEventListener('click', function (ev) {
       var b = ev.target.closest('[data-fx]'); if (!b) return;
       var act = b.getAttribute('data-fx');
@@ -3299,7 +3317,7 @@
       if (act === 'report') {
         box.innerHTML = '<div class="field"><textarea data-rtext rows="3" maxlength="500" placeholder="예: 지난달에 폐업했어요 / 전화번호가 031-000-0000으로 바뀌었어요 / 위치가 길 건너편이에요"></textarea></div>' +
           '<div class="chip-row"><button type="button" class="chip" data-rsend>보내기</button></div><div class="status-line" data-rmsg hidden></div>';
-        var ta = box.querySelector('[data-rtext]'); ta.focus();
+        var ta = box.querySelector('[data-rtext]'); try { ta.focus({ preventScroll: true }); } catch (_) { ta.focus(); }
         box.querySelector('[data-rsend]').addEventListener('click', function () {
           var t = ta.value.trim(), msg = box.querySelector('[data-rmsg]'), send = box.querySelector('[data-rsend]');
           msg.hidden = false;
