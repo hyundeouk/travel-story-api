@@ -999,6 +999,7 @@
           <button type="button" class="chip" data-layer="종주" style="--c:#0e7490">종주 코스 <span class="near-n" data-nearn="종주"></span></button>
           <button type="button" class="chip" data-layer="휴양림" style="--c:#3f7d2c">휴양림 <span class="near-n" data-nearn="휴양림"></span></button>
           <button type="button" class="chip" data-layer="캠핑장" style="--c:#2f7d4f">캠핑장 <span class="near-n" data-nearn="캠핑"></span></button>
+          <button type="button" class="chip" data-layer="캠핑용품점" style="--c:#b45309">캠핑용품점 <span class="near-n" data-nearn="캠핑용품"></span></button>
           <button type="button" class="chip" data-layer="골프장" style="--c:#4d7c0f">골프장 <span class="near-n" data-nearn="골프"></span></button>
           <button type="button" class="chip" data-layer="명소" style="--c:#2e7d57">명소 <span class="near-n" data-nearn="명소"></span></button>
           <button type="button" class="chip" data-layer="문화유산" style="--c:#a8552d">문화유산 <span class="near-n" data-nearn="문화유산"></span></button>
@@ -1108,6 +1109,7 @@
         <label class="filter"><span>이름 찾기</span><input type="search" id="camp-q" placeholder="캠핑장 이름" autocomplete="off"></label>
       </div>
       <div id="camp-status" class="status-line" hidden></div>
+      <div id="camp-tools" hidden><button type="button" class="link-btn" id="camp-norv" style="margin:0 0 10px">📄 예약 링크 없는 캠핑장 점검표 (PDF)</button><button type="button" class="link-btn" id="camp-shopcollect" style="margin:0 0 10px" hidden>🔄 전국 캠핑용품점 모으기</button></div>
       <div id="camp-list" class="place-list"></div>
     </section>
     <section id="view-food" class="view">
@@ -3258,6 +3260,11 @@
     view.rows = (view.rows || []).map(function (r) { if (!hit && r && re.test(String(r[0]))) { hit = true; return [r[0], val]; } return r; });
     if (!hit) view.rows.push([label, val]);
   }
+  function fixLink(view, label, url, text) {
+    var hit = false;
+    view.rows = (view.rows || []).map(function (r) { if (!hit && r && r[0] === label) { hit = true; return [label, url, 'link', text]; } return r; });
+    if (!hit) view.rows.push([label, url, 'link', text]);
+  }
   // 고친 정보를 화면용 자료(view)에 덮어 쓴다. 같은 view 에 두 번 해도 괜찮다.
   function applyFix(cat, view) {
     if (!view) return view;
@@ -3274,6 +3281,8 @@
     if (e.addr) { fixRow(view, /주소|소재지|위치/, '주소', e.addr); view.place = e.addr; }
     if (e.tel) { fixRow(view, /전화|문의/, '전화', e.tel); view.tel = e.tel; }
     if (e.hours) fixRow(view, /시간|영업|운영일/, '운영 시간', e.hours);
+    if (e.web) fixLink(view, '홈페이지', e.web, '홈페이지 열기');
+    if (e.rv) fixLink(view, '예약', e.rv, '예약하기');
     if (e.note) view.rows.push(['📝 운영자 안내', e.note]);
     return view;
   }
@@ -3304,6 +3313,9 @@
       '<div class="field"><label>주소</label><input data-ff="addr" maxlength="150" placeholder="' + escapeHtml(place || '바뀐 주소') + '" value="' + escapeHtml(e.addr || '') + '"></div>' +
       '<div class="field"><label>전화</label><input data-ff="tel" maxlength="30" inputmode="tel" placeholder="예: 02-123-4567" value="' + escapeHtml(e.tel || '') + '"></div>' +
       '<div class="field"><label>운영 시간</label><input data-ff="hours" maxlength="200" placeholder="예: 11:00~21:00, 월요일 휴무" value="' + escapeHtml(e.hours || '') + '"></div>' +
+      (/^cp:/.test(key) ?
+        '<div class="field"><label>예약 주소</label><input data-ff="rv" maxlength="300" inputmode="url" placeholder="https://... (예약 사이트 주소)" value="' + escapeHtml(e.rv || '') + '"></div>' +
+        '<div class="field"><label>홈페이지</label><input data-ff="web" maxlength="300" inputmode="url" placeholder="https://..." value="' + escapeHtml(e.web || '') + '"></div>' : '') +
       '<div class="field"><label>운영자 안내</label><textarea data-ff="note" rows="2" maxlength="500" placeholder="예: 2026년 9월 폐업 / 주차는 뒤편 공영주차장">' + escapeHtml(e.note || '') + '</textarea></div>' +
       '<div class="copy-hint">바꿀 칸만 적으세요. 비운 칸은 원래 자료가 그대로 보여요.</div>' +
       '<div class="chip-row"><button type="button" class="chip" data-ffsave>💾 저장</button>' + (fixes.edits[key] ? '<button type="button" class="chip" data-ffreset>↩ 원래대로</button>' : '') + '</div>' +
@@ -3708,8 +3720,10 @@
       q: c.n, mapQuery: c.n, srcName: srcs, camp: c, wikiOk: false, campSat: true,
     };
     if (c.goId) v.morePhotos = function () {
-      return api('camping?img=' + encodeURIComponent(c.goId), { quiet: true }).then(function (j) {
-        return (j.images || []).map(function (u) { return { url: u, desc: '', credit: '한국관광공사 고캠핑' }; });
+      // 고캠핑 대표 사진(대부분 캠핑장 전경)을 맨 앞에, 나머지 사진은 그 뒤에
+      return api('camping?img=' + encodeURIComponent(c.goId), { quiet: true }).catch(function () { return { images: [] }; }).then(function (j) {
+        var urls = (c.img ? [c.img] : []).concat((j.images || []).filter(function (u) { return u !== c.img; }));
+        return urls.map(function (u, i) { return { url: u, desc: i === 0 && c.img ? '대표 사진' : '', credit: '한국관광공사 고캠핑' }; });
       });
     };
     return v;
@@ -3759,6 +3773,30 @@
       }
     });
   }
+  // 운영자: 지금 목록(지역·유형 필터 그대로) 중 예약 링크가 없는 캠핑장을 점검표로 인쇄 → 'PDF로 저장'
+  function printCampChecklist(items) {
+    var list = items.filter(function (c) { var e = fixes.edits['cp:' + c.id] || {}; return !c.rv && !e.rv; });
+    var d = new Date(), day = d.getFullYear() + '.' + (d.getMonth() + 1) + '.' + d.getDate();
+    var lab = areaLabel() || '전국';
+    var old = document.getElementById('print-root'); if (old) old.remove();
+    var root = el('<div id="print-root"><h1>예약 링크 없는 캠핑장 점검표 · ' + escapeHtml(lab) + '</h1>' +
+      '<p class="pr-sub">' + day + ' · ' + list.length + '곳 (목록 ' + items.length + '곳 중) · 지역·이름 순 · 「찾기」를 누르면 네이버에서 예약 방법을 찾아봐요. 예약 주소를 찾으면 앱에서 그 캠핑장 → ✏️ 정보 고치기 → 예약 주소에 넣으세요. 「문화정보원」은 고캠핑에 없는 2022년 자료라 예약 정보가 원래 없어요.</p>' +
+      '<table><thead><tr><th>확인</th><th>#</th><th>캠핑장</th><th>지역</th><th>전화</th><th>홈페이지</th><th>자료</th><th>찾기</th><th>메모(예약 주소)</th></tr></thead><tbody>' +
+      list.map(function (c, i) {
+        var web = /^https?:\/\//.test(c.w || '') ? '<a href="' + escapeHtml(c.w) + '">' + escapeHtml(String(c.w).replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').slice(0, 28)) + '</a>' : '-';
+        return '<tr><td class="pr-box"><span></span></td><td>' + (i + 1) + '</td><td><b>' + escapeHtml(c.n) + '</b><small>' + escapeHtml(c.t || '') + '</small></td>' +
+          '<td>' + escapeHtml(((c.s || '') + ' ' + (c.g || '')).trim()) + '</td><td>' + escapeHtml(c.p || '-') + '</td><td>' + web + '</td>' +
+          '<td>' + (c.src === 'go' ? '고캠핑' : '문화정보원') + '</td>' +
+          '<td><a href="https://search.naver.com/search.naver?query=' + encodeURIComponent(c.n + ' 예약') + '">찾기</a></td><td class="pr-memo"></td></tr>';
+      }).join('') + '</tbody></table></div>');
+    document.body.appendChild(root);
+    var title = document.title; document.title = '예약링크없는캠핑장_' + lab + '_' + day.replace(/\./g, '-');
+    function done() { document.title = title; root.remove(); window.removeEventListener('afterprint', done); }
+    window.addEventListener('afterprint', done);
+    setTimeout(function () { try { window.print(); } catch (e) { done(); } }, 50);
+  }
+  $('camp-norv').addEventListener('click', function () { printCampChecklist(state.campShown || []); });
+  $('camp-shopcollect').addEventListener('click', collectShops);
   $('camp-kinds').addEventListener('click', function (e) {
     var b = e.target.closest('[data-ck]'); if (!b) return;
     state.campKind = b.getAttribute('data-ck');
@@ -3778,6 +3816,7 @@
     var list = $('camp-list'), status = $('camp-status');
     document.querySelectorAll('#camp-kinds [data-ck]').forEach(function (b) { var on = b.getAttribute('data-ck') === kind; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
     document.querySelectorAll('#camp-filters [data-cksite]').forEach(function (x) { x.hidden = kind !== 'site'; });
+    $('camp-tools').hidden = true;
     $('camp-q').placeholder = kind === 'site' ? '캠핑장 이름' : '가게 이름';
     $('camp-q').value = state.campQ;
     status.hidden = false; status.className = 'status-line';
@@ -3798,6 +3837,9 @@
       var ORDER = {}; AREAS.forEach(function (a, i) { ORDER[a[1]] = i; });
       pick.sort(function (a, b) { return ((ORDER[a.s] != null ? ORDER[a.s] : 99) - (ORDER[b.s] != null ? ORDER[b.s] : 99)) || String(a.g || '').localeCompare(String(b.g || ''), 'ko') || String(a.n).localeCompare(String(b.n), 'ko'); });
       var shown = pick;
+      state.campShown = shown;
+      $('camp-tools').hidden = !(state.auth && state.auth.canEdit);
+      $('camp-norv').hidden = false; $('camp-shopcollect').hidden = true;
       list.innerHTML = '';
       var at = 0, STEP = 90;
       function more() {
@@ -3828,44 +3870,104 @@
       list.innerHTML = '';
     }
   }
-  async function renderCampShop(my, list, status) {
+  // ----- 🛒 캠핑용품점: 운영자가 모아 저장한 전국 목록(카카오 장소 검색)을 보여 준다
+  var shopCache = null;
+  function loadShops(force) {
+    if (!force && shopCache) return shopCache;
+    shopCache = api('campshops', { quiet: true }).catch(function () { return { items: [] }; });
+    return shopCache;
+  }
+  var SIDO_SHORT = { 서울특별시: '서울', 부산광역시: '부산', 대구광역시: '대구', 인천광역시: '인천', 광주광역시: '광주', 대전광역시: '대전', 울산광역시: '울산', 세종특별자치시: '세종', 경기도: '경기', 강원도: '강원', 강원특별자치도: '강원', 충청북도: '충북', 충청남도: '충남', 전라북도: '전북', 전북특별자치도: '전북', 전라남도: '전남', 경상북도: '경북', 경상남도: '경남', 제주특별자치도: '제주' };
+  function shortSido(addr) { var t = String(addr || '').trim().split(/\s+/)[0] || ''; return SIDO_SHORT[t] || t.slice(0, 2); }
+  function kakaoToShop(r) {
+    return { id: String(r.id), n: r.place_name, cat: String(r.category_name || ''), a: r.road_address_name || r.address_name || '', p: r.phone || '', y: Number(r.y), x: Number(r.x), u: String(r.place_url || '').replace(/^http:/, 'https:') };
+  }
+  function isShopResult(r) { return !/야영|캠핑장|글램핑|카라반|펜션|숙박|여행/.test(r.category_name || ''); } // 캠핑장·숙소는 빼고 가게만
+  function shopView(s) {
+    var cat = String(s.cat || '').split(' > ').slice(-1)[0] || '';
+    return {
+      title: s.n, badge: '캠핑용품점', sub: [cat, s.a].filter(Boolean).join(' · '),
+      rows: [['분류', String(s.cat || '').replace(/ > /g, ' › ')], ['주소', s.a], ['전화', s.p], ['카카오맵', s.u, 'link', '카카오맵에서 보기 (영업시간·후기)']],
+      place: s.a, tel: s.p, lat: s.y, lng: s.x, ph: '🛒', key: 'ks:' + s.id, q: s.n, mapQuery: s.n, srcName: '카카오 장소 검색',
+    };
+  }
+  // 운영자: 캠핑장이 있는 곳과 큰 도시를 중심으로 20km씩 "캠핑용품"을 찾아 전국 목록을 만든다
+  var shopCollecting = false;
+  async function collectShops() {
+    if (shopCollecting) return;
+    var btn = $('camp-shopcollect'), status = $('camp-status');
     var P = await kakaoPlaces().catch(function () { return null; });
-    if (my !== campSeq) return;
-    if (!P || !window.kakao || !kakao.maps.services) { list.innerHTML = ''; status.className = 'status-line err'; status.textContent = '카카오 장소 검색을 쓸 수 없어서 캠핑용품점을 찾지 못했어요.'; return; }
-    var lab = areaLabel();
-    var pos = lab ? null : await Promise.race([locate(), new Promise(function (r) { setTimeout(function () { r(null); }, 6000); })]);
-    if (my !== campSeq) return;
-    if (!lab && !pos) { list.innerHTML = '<div class="empty-state"><strong>지역을 골라 주세요</strong>위치를 허용하면 내 주변 20km 안의 캠핑용품점을 가까운 순으로 보여 드려요.</div>'; status.textContent = ''; return; }
-    var query = (lab ? lab + ' ' : '') + '캠핑용품';
-    var res = [];
-    for (var page = 1; page <= 3; page++) {
-      var opt = { size: 15, page: page };
-      if (pos) { opt.location = new kakao.maps.LatLng(pos.lat, pos.lng); opt.radius = 20000; if (kakao.maps.services.SortBy) opt.sort = kakao.maps.services.SortBy.DISTANCE; }
-      var r = await kakaoSearch(query, opt);
-      if (my !== campSeq) return;
-      res = res.concat(r);
-      if (r.length < 15) break;
+    if (!P || !window.kakao || !kakao.maps.services) { showToast('카카오 장소 검색을 쓸 수 없어요', 4000); return; }
+    shopCollecting = true; btn.disabled = true;
+    try {
+      var camps = await loadCamps();
+      var cells = {}, centers = [];
+      function addC(y, x) { var k = Math.floor(y / 0.22) + '_' + Math.floor(x / 0.27); if (!cells[k]) { cells[k] = 1; centers.push([y, x]); } }
+      [[37.5665, 126.978], [37.65, 127.06], [37.48, 126.9], [35.1796, 129.0756], [35.8714, 128.6014], [37.4563, 126.7052], [35.1595, 126.8526], [36.3504, 127.3845], [35.5384, 129.3114], [36.48, 127.289], [33.4996, 126.5312], [33.2541, 126.56]].forEach(function (c) { addC(c[0], c[1]); });
+      camps.items.forEach(function (c) { addC(c.y, c.x); });
+      var found = {}, n = 0, done = 0;
+      async function one(c) {
+        for (var page = 1; page <= 3; page++) {
+          var opt = { size: 15, page: page, location: new kakao.maps.LatLng(c[0], c[1]), radius: 20000 };
+          var r = await kakaoSearch('캠핑용품', opt).catch(function () { return []; });
+          r.forEach(function (x) { if (!found[x.id] && isShopResult(x)) { found[x.id] = kakaoToShop(x); n++; } });
+          if (r.length < 15) break;
+        }
+        done++;
+        btn.textContent = '모으는 중... ' + done + '/' + centers.length + ' · ' + n + '곳';
+      }
+      var queue = centers.slice();
+      await Promise.all([0, 1, 2, 3].map(async function () { while (queue.length) await one(queue.shift()); }));
+      var items = Object.keys(found).map(function (k) { return found[k]; });
+      btn.textContent = '저장하는 중... (' + items.length + '곳)';
+      var j = await api('campshops', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) });
+      showToast('🛒 전국 캠핑용품점 ' + (j.count || items.length) + '곳을 모았어요', 5000);
+      shopCache = null;
+    } catch (e) {
+      status.className = 'status-line err'; status.textContent = '캠핑용품점을 모으지 못했어요. 다시 눌러 주세요.';
     }
-    var seen = {}, q = state.campQ.replace(/\s+/g, '');
-    var shops = res.filter(function (r) {
-      if (seen[r.id]) return false; seen[r.id] = 1;
-      if (/야영|캠핑장|글램핑|카라반|펜션|숙박/.test(r.category_name || '')) return false; // 캠핑장·숙소는 빼고 가게만
-      return !q || String(r.place_name).replace(/\s+/g, '').indexOf(q) >= 0;
-    });
+    shopCollecting = false; btn.disabled = false;
+    if (state.view === 'camp') renderCamp();
+  }
+  function shopAt(at) { var d = at ? new Date(at) : null; return d && !isNaN(d) ? d.getFullYear() + '.' + (d.getMonth() + 1) + '.' + d.getDate() : ''; }
+  async function renderCampShop(my, list, status) {
+    var owner = !!(state.auth && state.auth.canEdit);
+    var data = await loadShops();
+    if (my !== campSeq) return;
+    var all = data.items || [];
+    $('camp-tools').hidden = !owner;
+    $('camp-norv').hidden = true;
+    var cb = $('camp-shopcollect');
+    cb.hidden = !owner;
+    if (!shopCollecting) cb.textContent = '🔄 전국 캠핑용품점 ' + (all.length ? '다시 모으기' : '모으기') + ' (2~5분)';
+    var lab = areaLabel(), q = state.campQ.replace(/\s+/g, '');
+    var ORDER = {}; AREAS.forEach(function (a, i) { ORDER[a[1]] = i; });
+    var pick = all.filter(function (s) { return (!lab || shortSido(s.a) === lab) && (!q || String(s.n).replace(/\s+/g, '').indexOf(q) >= 0); });
+    pick.sort(function (a, b) { var sa = shortSido(a.a), sb = shortSido(b.a); return ((ORDER[sa] != null ? ORDER[sa] : 99) - (ORDER[sb] != null ? ORDER[sb] : 99)) || String(a.a).localeCompare(String(b.a), 'ko') || String(a.n).localeCompare(String(b.n), 'ko'); });
     list.innerHTML = '';
-    shops.forEach(function (r) {
-      var d = pos ? distKm(pos.lat, pos.lng, Number(r.y), Number(r.x)) : null;
-      var cat = String(r.category_name || '').split(' > ').slice(-1)[0] || '';
-      var v = {
-        title: r.place_name, badge: '캠핑용품점', sub: [cat, r.road_address_name || r.address_name].filter(Boolean).join(' · '),
-        rows: [['분류', String(r.category_name || '').replace(/ > /g, ' › ')], ['주소', r.road_address_name || r.address_name], ['전화', r.phone], ['카카오맵', String(r.place_url || '').replace(/^http:/, 'https:'), 'link', '카카오맵에서 보기 (영업시간·후기)']],
-        place: r.road_address_name || r.address_name, tel: r.phone, lat: Number(r.y), lng: Number(r.x), ph: '🛒', key: 'ks:' + r.id,
-        q: r.place_name, mapQuery: r.place_name, srcName: '카카오 장소 검색',
-      };
-      list.appendChild(mtnCard('캠핑용품점', v, [['분류', cat], ['주소', v.place], ['거리', campDistTxt(d)]], true));
-    });
-    status.textContent = '🛒 캠핑용품점 · ' + (lab ? lab + ' ' : '내 주변 20km · ') + shops.length + '곳' + (pos ? ' · 가까운 순' : '') + ' · 자료: 카카오 장소 검색';
-    if (!shops.length) list.innerHTML = '<div class="empty-state"><strong>찾은 캠핑용품점이 없어요</strong>지역을 바꾸거나 이름을 지워 보세요.</div>';
+    if (!all.length) {
+      list.innerHTML = '<div class="empty-state"><strong>아직 캠핑용품점 목록이 없어요</strong>' + (owner ? '위 「🔄 전국 캠핑용품점 모으기」를 누르면 카카오 장소 검색으로 전국 목록을 만들어요.' : '내 주변 캠핑용품점은 「내 주변 검색 → 캠핑용품점」에서 볼 수 있어요.') + '</div>';
+      status.textContent = '🛒 캠핑용품점'; return;
+    }
+    var at = 0, STEP = 90;
+    function more() {
+      if (my !== campSeq) return;
+      var end = Math.min(pick.length, at + STEP);
+      for (; at < end; at++) {
+        var s = pick[at], cat = String(s.cat || '').split(' > ').slice(-1)[0] || '';
+        list.appendChild(mtnCard('캠핑용품점', shopView(s), [['분류', cat], ['주소', s.a], ['전화', s.p]], true));
+      }
+      var old = list.querySelector('.camp-more'); if (old) old.remove();
+      if (at < pick.length) {
+        var btn = el('<button type="button" class="link-btn camp-more" style="grid-column:1/-1;justify-self:center">더 보기 (' + (pick.length - at) + '곳 남음)</button>');
+        btn.addEventListener('click', more);
+        list.appendChild(btn);
+        if (window.IntersectionObserver) { var io = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { io.disconnect(); more(); } }, { rootMargin: '600px' }); io.observe(btn); }
+      }
+    }
+    more();
+    status.textContent = '🛒 캠핑용품점 · ' + (lab || '전국') + ' ' + pick.length + '곳 · 지역·주소 순 · 내 주변은 「내 주변 검색 → 캠핑용품점」 · 자료: 카카오 장소 검색' + (data.at ? ' (' + shopAt(data.at) + ' 모음)' : '');
+    if (!pick.length) list.innerHTML = '<div class="empty-state"><strong>찾는 캠핑용품점이 없어요</strong>지역·이름을 바꿔 보세요.</div>';
   }
   // ================= 산 탭 =================
   // 100대명산 · BAC 명산100 · 명산100+ · 그 밖의 산(OpenStreetMap) · 종주 코스를 한곳에서 본다.
@@ -3903,7 +4005,7 @@
           lines.filter(function (l) { return l[1]; }).map(function (l) { return '<div class="card-line"><b>' + escapeHtml(l[0]) + ':</b> ' + escapeHtml(l[1]) + '</div>'; }).join('') +
         '</div>' +
       '</div>');
-    whenVisible(card, function () { return setThumb(card, { url: view.image || null, q: view.title, lat: view.lat, lng: view.lng, wiki: true, addr: view.place, noSearch: !!generic }); });
+    whenVisible(card, function () { return setThumb(card, { hero: view.key ? customUrl(view.key) : null, url: view.image || null, q: view.title, lat: view.lat, lng: view.lng, wiki: true, addr: view.place, noSearch: !!generic }); });
     card.addEventListener('click', function () { openPlaceDetail(cat, view); });
     return markFix(card, cat, view);
   }
@@ -4749,7 +4851,7 @@
   }
 
   // 지도에 표시할 종류. 버튼 색과 핀 색이 같다. 여러 개를 동시에 켤 수 있다.
-  var LAYER_COLOR = { 명소: '#2e7d57', 맛집: '#d9651c', 행사: '#7d4fc4', 문화유산: '#a8552d', 휴양림: '#3f7d2c', 숲길: '#7a6a2f', '내 장소': '#c73a78', 스토리: '#0e8f8f', '내 주변': '#2a7de1', 종주: '#0e7490', BAC: '#d4a017', 'BAC+': '#b7791f', 산: '#8d7b5a', 둘레길: '#0e7490', 골프장: '#4d7c0f', 캠핑장: '#2f7d4f' };
+  var LAYER_COLOR = { 명소: '#2e7d57', 맛집: '#d9651c', 행사: '#7d4fc4', 문화유산: '#a8552d', 휴양림: '#3f7d2c', 숲길: '#7a6a2f', '내 장소': '#c73a78', 스토리: '#0e8f8f', '내 주변': '#2a7de1', 종주: '#0e7490', BAC: '#d4a017', 'BAC+': '#b7791f', 산: '#8d7b5a', 둘레길: '#0e7490', 골프장: '#4d7c0f', 캠핑장: '#2f7d4f', 캠핑용품점: '#b45309' };
   // 지도 탭에는 공공 자료만 보여준다 (내 장소·스토리는 각 탭에서 보고, 상세의 "큰 지도에서 보기"는 그 위치에 핀 하나만 찍는다)
   var LAYER_ORDER = ['내 주변', '숲길', 'BAC+', '산', '종주', '휴양림', '골프장', '명소', '문화유산', '행사', '맛집'];
   var LAYER_LABEL = { 숲길: '100대명산', 'BAC+': '명산100+', 산: '산', 종주: '종주 코스' }; // 지도에서는 좌표가 있는 100대 명산만 핀으로 찍힌다
@@ -5204,7 +5306,7 @@
   // ================= 내 주변 (지도 탭 첫 화면) =================
   // 내 위치에서 30km 안의 산(100대명산·BAC·명산100+·그 밖의 산) · 휴양림 · 골프장 · 명소 · 문화유산 · 행사 · 맛집을 한 번에 보여준다.
   var NEAR_KM = 30;
-  var NEAR_CATS = [['산', '100대명산', '#7a6a2f'], ['BAC', 'BAC 명산100', '#d4a017'], ['BAC+', '명산100+', '#b7791f'], ['봉', '그 밖의 산', '#8d7b5a'], ['휴양림', '휴양림', '#3f7d2c'], ['캠핑', '캠핑장', '#2f7d4f'], ['골프', '골프장', '#4d7c0f'], ['종주', '종주 코스', '#0e7490'], ['명소', '명소', '#2e7d57'],
+  var NEAR_CATS = [['산', '100대명산', '#7a6a2f'], ['BAC', 'BAC 명산100', '#d4a017'], ['BAC+', '명산100+', '#b7791f'], ['봉', '그 밖의 산', '#8d7b5a'], ['휴양림', '휴양림', '#3f7d2c'], ['캠핑', '캠핑장', '#2f7d4f'], ['캠핑용품', '캠핑용품점', '#b45309'], ['골프', '골프장', '#4d7c0f'], ['종주', '종주 코스', '#0e7490'], ['명소', '명소', '#2e7d57'],
     ['문화유산', '문화유산', '#a8552d'], ['행사', '행사', '#7d4fc4'], ['맛집', '맛집', '#d9651c'], ['내 장소', '내 장소', '#c73a78']];
   var NEAR_MAX = { 명소: 200, 맛집: 150, 행사: 80, 문화유산: 250 };
   state.nearOn = {};
@@ -5212,7 +5314,7 @@
   state.nearFit = true;
   state.nearLoaded = {};
   // 위쪽 단추 → 내 주변에서 켜고 끄는 종류
-  var CHIP_TAGS = { 숲길: ['산', 'BAC'], 'BAC+': ['BAC+'], 산: ['봉'], 종주: ['종주'], 휴양림: ['휴양림'], 골프장: ['골프'], 캠핑장: ['캠핑'], 명소: ['명소'], 문화유산: ['문화유산'], 행사: ['행사'], 맛집: ['맛집'], '내 장소': ['내 장소'] };
+  var CHIP_TAGS = { 숲길: ['산', 'BAC'], 'BAC+': ['BAC+'], 산: ['봉'], 종주: ['종주'], 휴양림: ['휴양림'], 골프장: ['골프'], 캠핑장: ['캠핑'], 캠핑용품점: ['캠핑용품'], 명소: ['명소'], 문화유산: ['문화유산'], 행사: ['행사'], 맛집: ['맛집'], '내 장소': ['내 장소'] };
   state.nearMarkers = [];
   // 시·도 대략 범위 [남, 서, 북, 동] — 50km 안에 걸치는 시·도의 문화유산만 받는다
   var AREA_BOX = {
@@ -5461,6 +5563,26 @@
         n++;
       });
       counts['캠핑'] = n;
+    }));
+    // 캠핑용품점 (운영자가 모아 둔 전국 목록 · 없으면 그 자리에서 카카오 검색)
+    if (campOk && want('캠핑용품')) loaded(['캠핑용품']);
+    if (campOk && want('캠핑용품')) group('캠핑용품점', loadShops().then(async function (data) {
+      if (seq !== state.mapSeq) return;
+      var rows = (data.items || []).filter(function (s) { return near(s.y, s.x); });
+      if (!(data.items || []).length) {
+        var P = await kakaoPlaces().catch(function () { return null; });
+        if (P && window.kakao && kakao.maps.services) {
+          var seen = {};
+          for (var page = 1; page <= 3; page++) {
+            var r = await kakaoSearch('캠핑용품', { size: 15, page: page, location: new kakao.maps.LatLng(pos.lat, pos.lng), radius: 20000 }).catch(function () { return []; });
+            r.forEach(function (x) { if (!seen[x.id] && isShopResult(x)) { seen[x.id] = 1; rows.push(kakaoToShop(x)); } });
+            if (r.length < 15) break;
+          }
+        }
+      }
+      if (seq !== state.mapSeq) return;
+      rows.forEach(function (s) { var v = shopView(s); nearMarker(map, '캠핑용품점', v, ['캠핑용품'], LAYER_COLOR['캠핑용품점'], v.title, ''); });
+      counts['캠핑용품'] = rows.length;
     }));
     if (want('휴양림')) loaded(['휴양림']);
     if (want('휴양림')) group('휴양림', loadItems('휴양림').then(function (entry) {
@@ -8268,7 +8390,7 @@
   ];
   var TOPIC_OF = {
     layer: { 숲길: 'mtn', 종주: 'mtn', 'BAC+': 'mtn', 산: 'mtn', 휴양림: 'forest', 골프장: 'golf', 명소: 'sight', 문화유산: 'heritage', 행사: 'festival', 맛집: 'food' },
-    near: { 산: 'mtn', BAC: 'mtn', 'BAC+': 'mtn', 봉: 'mtn', 종주: 'mtn', 골프: 'golf', 캠핑: 'camp', 휴양림: 'forest', 명소: 'sight', 문화유산: 'heritage', 행사: 'festival', 맛집: 'food' },
+    near: { 산: 'mtn', BAC: 'mtn', 'BAC+': 'mtn', 봉: 'mtn', 종주: 'mtn', 골프: 'golf', 캠핑: 'camp', 캠핑용품: 'camp', 휴양림: 'forest', 명소: 'sight', 문화유산: 'heritage', 행사: 'festival', 맛집: 'food' },
     cat: { 숲길: 'mtn', 둘레길: 'mtn', 휴양림: 'forest', 명소: 'sight', 문화유산: 'heritage', 행사: 'festival', 맛집: 'food' },
     tab: { golf: 'golf', weather: 'weather', gstory: 'gstory', mtn: 'mtn', food: 'food', camp: 'camp' },
   };
@@ -8917,6 +9039,8 @@
     // 골프를 공개하지 않으면 지도의 "골프장" 단추도 숨긴다
     var campChip = document.querySelector('#map-chips [data-layer="캠핑장"]');
     if (campChip) campChip.hidden = !!(sh && !shareTab(sh, 'camp'));
+    var shopChip = document.querySelector('#map-chips [data-layer="캠핑용품점"]');
+    if (shopChip) shopChip.hidden = !!(sh && !shareTab(sh, 'camp'));
     var golfChip = document.querySelector('#map-chips [data-layer="골프장"]');
     if (golfChip) golfChip.hidden = !!(sh && !shareTab(sh, 'golf'));
     if (sh && !shareTab(sh, 'golf')) delete state.mapLayers['골프장'];
@@ -9156,7 +9280,7 @@
       ks.forEach(function (k) {
         var e = fixes.edits[k];
         var row = el('<div class="fix-row"><div><b>' + escapeHtml(e.title || e.orig || k) + '</b>' + (e.title && e.orig && e.title !== e.orig ? ' <small>(원래: ' + escapeHtml(e.orig) + ')</small>' : '') + ' <small>' + escapeHtml(e.cat || '') + '</small>' +
-          '<small>' + escapeHtml([e.addr && '주소 ' + e.addr, e.tel && '전화 ' + e.tel, e.hours && '시간 ' + e.hours, e.note && '안내 ' + e.note].filter(Boolean).join(' · ')) + '</small></div>' +
+          '<small>' + escapeHtml([e.addr && '주소 ' + e.addr, e.tel && '전화 ' + e.tel, e.hours && '시간 ' + e.hours, e.rv && '예약 ' + e.rv, e.web && '홈페이지 ' + e.web, e.note && '안내 ' + e.note].filter(Boolean).join(' · ')) + '</small></div>' +
           '<div class="chip-row"><button type="button" class="chip" data-x="edit">✏️ 고치기</button><button type="button" class="chip" data-x="reset">↩ 원래대로</button></div><div data-xbox></div></div>');
         row.addEventListener('click', function (ev) {
           var b = ev.target.closest('[data-x]'); if (!b) return;

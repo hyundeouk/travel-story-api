@@ -51,6 +51,7 @@ import fn_photos, { config as cfg_photos } from '../netlify/functions/photos.mts
 import fn_picks, { config as cfg_picks } from '../netlify/functions/picks.mts';
 import fn_fixes, { config as cfg_fixes } from '../netlify/functions/fixes.mts';
 import fn_camping, { config as cfg_camping } from '../netlify/functions/camping.mts';
+import fn_campshops, { config as cfg_campshops } from '../netlify/functions/campshops.mts';
 import fn_placedetail, { config as cfg_placedetail } from '../netlify/functions/placedetail.mts';
 import fn_placesearch, { config as cfg_placesearch } from '../netlify/functions/placesearch.mts';
 import fn_restaurants, { config as cfg_restaurants } from '../netlify/functions/restaurants.mts';
@@ -89,6 +90,7 @@ for (const [fn, cfg] of [
   [fn_picks, cfg_picks],
   [fn_fixes, cfg_fixes],
   [fn_camping, cfg_camping],
+  [fn_campshops, cfg_campshops],
   [fn_placedetail, cfg_placedetail],
   [fn_placesearch, cfg_placesearch],
   [fn_restaurants, cfg_restaurants],

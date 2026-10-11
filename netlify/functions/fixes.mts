@@ -91,7 +91,8 @@ export default async (req: Request, _context: Context) => {
     else if (act === 'unhide') delete d.hidden[key];
     else if (act === 'edit') {
       const f = body?.fix || {};
-      const fix: any = { title: str(f.title, 80), addr: str(f.addr, 150), tel: str(f.tel, 30), hours: text(f.hours, 200), note: text(f.note, 500) };
+      const url = (v: unknown) => { const s = str(v, 300); return /^https?:\/\/[^\s<>"']+$/i.test(s) ? s : ''; };
+      const fix: any = { title: str(f.title, 80), addr: str(f.addr, 150), tel: str(f.tel, 30), hours: text(f.hours, 200), note: text(f.note, 500), rv: url(f.rv), web: url(f.web) };
       Object.keys(fix).forEach((k) => { if (!fix[k]) delete fix[k]; });
       if (Object.keys(fix).length) d.edits[key] = { ...fix, orig: str(body?.title, 80), cat: str(body?.cat, 20), at: now };
       else delete d.edits[key];
