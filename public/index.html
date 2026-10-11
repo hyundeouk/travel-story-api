@@ -468,6 +468,22 @@
   .guest-row.blocked { opacity: 0.7; }
   .gr-main { min-width: 0; } .gr-main small { display: block; color: var(--ink-dim); font-size: 12px; margin-top: 2px; }
   .gr-act { display: flex; gap: 6px; flex-wrap: wrap; } .gr-act .link-btn { margin: 0; }
+  .gr-main .gr-nick { font-weight: 400; color: var(--ink-dim); font-size: 0.85em; }
+  .gr-extra { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+  .gr-dev { color: var(--ink-dim); }
+  .gr-use { display: flex; flex-wrap: wrap; gap: 4px; }
+  .gr-use span { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; background: var(--surface-2); white-space: nowrap; }
+  .gr-use span b { font-weight: 700; margin-left: 3px; }
+  .gr-errbtn { align-self: flex-start; border: 1px solid #e0a3a3; background: #fdecec; color: #b42318; border-radius: 999px; padding: 2px 10px; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .gr-errbtn.new { background: #d92d20; color: #fff; border-color: #d92d20; }
+  .gr-errs { display: flex; flex-direction: column; gap: 6px; }
+  .gr-err { border-left: 3px solid #d92d20; background: var(--surface-2); border-radius: 8px; padding: 6px 9px; word-break: break-word; }
+  .gr-err.new { border-left-color: #f79009; box-shadow: 0 0 0 1px #f7900955; }
+  .gr-err .ge-msg { font-weight: 700; } .gr-err small { display: block; color: var(--ink-dim); margin-top: 2px; }
+  .ga-summary { border: 1px solid #f0b4b4; background: #fff4f4; color: #8a1c1c; border-radius: 12px; padding: 9px 12px; margin-bottom: 10px; font-size: 0.9rem; }
+  [data-theme="dark"] .ga-summary { background: #3a1d1d; color: #ffd5d5; border-color: #6b2c2c; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ga-summary { background: #3a1d1d; color: #ffd5d5; border-color: #6b2c2c; } }
+  .err-badge { display: inline-block; background: #d92d20; color: #fff; border-radius: 999px; padding: 0 7px; font-size: 0.78em; font-weight: 700; margin-left: 4px; line-height: 1.6; }
   .primary-btn.ghost { background: var(--surface-2); color: var(--ink); }
   .gs-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin: 4px 0 12px; }
   .gs-tools { display: flex; gap: 8px; align-items: center; }
@@ -1134,11 +1150,16 @@
     throw new Error('relay failed');
   }
   async function api(path, opts) {
-    var res = await fetch('/api/' + path, opts);
+    var res;
+    try { res = await fetch('/api/' + path, opts); }
+    catch (ne) { if (navigator.onLine !== false) tele.err('서버에 연결하지 못함', '/api/' + String(path).split('?')[0]); throw ne; }
     if (!res.ok) {
       var e = new Error('http ' + res.status);
       e.status = res.status;
       try { e.body = await res.json(); } catch (_) { e.body = null; }
+      if (res.status >= 500 && !(res.status === 502 && e.body && Array.isArray(e.body.relayNeed) && e.body.relayNeed.length)) {
+        tele.err('서버 오류 ' + res.status + (e.body && e.body.error ? ' (' + String(e.body.error).slice(0, 80) + ')' : ''), '/api/' + String(path).split('?')[0]);
+      }
       if (res.status === 502 && e.body && Array.isArray(e.body.relayNeed) && e.body.relayNeed.length && !(opts && opts.method && opts.method !== 'GET')) {
         return relayApi(path, e.body.relayNeed);
       }
@@ -1149,6 +1170,103 @@
     }
     return res.json();
   }
+  // ===== 손님 사용 기록 · 오류 알림 =====
+  // 손님 기기에서 어떤 기능을 썼는지(횟수)와 오류를 모아 주인에게 보낸다. 주인 기기는 보내지 않는다.
+  // 위치·글 내용·검색어는 보내지 않는다. 같은 오류는 한 번만, 한 번 열 때 최대 15건.
+  var tele = (function () {
+    var usage = {}, errs = [], seen = {}, nErr = 0, timer = 0, firstSend = true;
+    var VIEW_NAME = { map: '내 주변 검색', mtn: '산', golf: '골프', weather: '날씨', browse: '둘러보기', gstory: '스토리', feed: '내 여행 기록', mine: '내 장소' };
+    function deviceName() {
+      var ua = navigator.userAgent || '', os, br = '';
+      if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) os = 'iPad';
+      else if (/iPhone/.test(ua)) os = 'iPhone';
+      else if (/Android/.test(ua)) {
+        var md = /Android [\d.]+;\s*(?:[a-z]{2}[-_][a-z]{2};\s*)?([^;)]+?)(?:\s+Build\/[^;)]*)?[;)]/i.exec(ua);
+        var av = /Android (\d+(?:\.\d+)?)/.exec(ua);
+        os = 'Android' + (av ? ' ' + av[1] : '') + (md && md[1] && !/^(K|wv|Linux|U)$/.test(md[1].trim()) ? ' ' + md[1].trim() : '');
+      }
+      else if (/Windows/.test(ua)) os = 'Windows';
+      else if (/Mac OS X/.test(ua)) os = 'Mac';
+      else if (/CrOS/.test(ua)) os = '크롬북';
+      else if (/Linux/.test(ua)) os = 'Linux';
+      else os = '기타 기기';
+      var iv = /OS (\d+)[_.](\d+)/.exec(ua);
+      if (iv && /^iP/.test(os)) os += ' iOS ' + iv[1] + '.' + iv[2];
+      if (/KAKAOTALK/i.test(ua)) br = '카카오톡 안';
+      else if (/NAVER\(/.test(ua)) br = '네이버 앱 안';
+      else if (/Instagram/.test(ua)) br = '인스타그램 안';
+      else if (/FBAN|FBAV/.test(ua)) br = '페이스북 안';
+      else if (/SamsungBrowser/.test(ua)) br = '삼성 인터넷';
+      else if (/Whale/.test(ua)) br = '웨일';
+      else if (/Edg(e|A|iOS)?\//.test(ua)) br = '엣지';
+      else if (/OPR\/|Opera/.test(ua)) br = '오페라';
+      else if (/FxiOS|Firefox/.test(ua)) br = '파이어폭스';
+      else if (/CriOS|Chrome/.test(ua)) br = '크롬';
+      else if (/Safari/.test(ua)) br = '사파리';
+      return os + (br ? ' · ' + br : '');
+    }
+    function device() {
+      var app = false;
+      try { app = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) {}
+      return { name: deviceName(), w: Math.round(window.innerWidth), h: Math.round(window.innerHeight), app: app };
+    }
+    function owner() { return !!(state.auth && state.auth.canEdit); }
+    function active() { var a = state.auth; return !!(a && a.configured && !a.canEdit && a.linkOk !== false); }
+    function schedule(ms) {
+      if (timer && ms >= 30000) return;
+      clearTimeout(timer);
+      timer = setTimeout(function () { timer = 0; flush(false); }, ms);
+    }
+    function use(k) {
+      if (owner() || !k) return;
+      k = String(k).slice(0, 40);
+      usage[k] = (usage[k] || 0) + 1;
+      schedule(60000);
+    }
+    function err(msg, where) {
+      if (owner()) return;
+      msg = String(msg || '오류').slice(0, 300); where = String(where || '').slice(0, 300);
+      var key = msg + '|' + where;
+      if (seen[key] || nErr >= 15) return;
+      seen[key] = 1; nErr++;
+      errs.push({ msg: msg, where: where, view: VIEW_NAME[state.view] || state.view || '' });
+      schedule(3000);
+    }
+    function flush(beacon) {
+      if (!state.auth) { if (beacon) return; schedule(5000); return; } // 아직 누구인지 모름 → 조금 뒤에
+      if (!active()) { usage = {}; errs = []; return; }
+      if (!firstSend && !errs.length && !Object.keys(usage).length) return;
+      var body = JSON.stringify({ usage: usage, errors: errs, device: device(), session: firstSend });
+      usage = {}; errs = []; firstSend = false;
+      try {
+        if (beacon && navigator.sendBeacon && navigator.sendBeacon('/api/glog', new Blob([body], { type: 'text/plain' }))) return;
+        fetch('/api/glog', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: body, keepalive: true, credentials: 'same-origin' }).catch(function () {});
+      } catch (e) {}
+    }
+    function stackOf(x) { try { return String(x && x.stack || '').split('\n').slice(0, 3).join(' ').replace(/\s+/g, ' ').slice(0, 220); } catch (e) { return ''; } }
+    window.addEventListener('error', function (e) {
+      var f = e.filename ? String(e.filename).replace(location.origin, '') : '';
+      err(e.message || '알 수 없는 오류', (f ? f + (e.lineno ? ':' + e.lineno + ':' + (e.colno || 0) : '') : '') + (e.error ? ' | ' + stackOf(e.error) : ''));
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      var r = e.reason;
+      err('처리되지 않은 오류: ' + String(r && r.message || r || '').slice(0, 200), stackOf(r));
+    });
+    // 화면 코드가 console.error 로 남기는 실패도 함께 받는다 (예: "[stories] load failed")
+    var ce = console.error;
+    console.error = function () {
+      try {
+        var a = Array.prototype.slice.call(arguments);
+        var label = typeof a[0] === 'string' ? a[0] : '';
+        var x = a.find(function (v) { return v && (v.message || v.stack); });
+        err((label ? label + ' ' : '') + (x ? x.message : a.slice(label ? 1 : 0).map(String).join(' ')).trim(), x ? stackOf(x) : 'console');
+      } catch (e2) {}
+      return ce.apply(console, arguments);
+    };
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(true); });
+    window.addEventListener('pagehide', function () { flush(true); });
+    return { use: use, err: err, flush: flush, deviceName: deviceName, VIEW_NAME: VIEW_NAME };
+  })();
   // 권한 확인(공유 링크 등록 포함)이 끝난 뒤에 자료를 불러오기 위한 약속.
   var authDone;
   var authReady = new Promise(function (resolve) { authDone = resolve; });
@@ -1181,6 +1299,7 @@
 
   // ---------- 탭 전환 ----------
   function switchView(target) {
+    if (state.view !== target) tele.use('탭: ' + (tele.VIEW_NAME[target] || target));
     state.view = target;
     document.querySelectorAll('.segmented button').forEach(function (b) {
       var on = b.getAttribute('data-view') === target;
@@ -4048,6 +4167,7 @@
     var chip = e.target.closest('.chip');
     if (!chip) return;
     var layer = chip.getAttribute('data-layer');
+    tele.use('여행 단추: ' + layer);
     if (state.poiMode) { exitPoiMode(layer); return; }
     // 내 주변(반경 30km) 화면: 단추는 그 종류를 켜고 끈다.
     if (CHIP_TAGS[layer]) {
@@ -5004,6 +5124,7 @@
       var b = e.target.closest('[data-poi]');
       if (!b) return;
       var c = b.getAttribute('data-poi');
+      if (!P.on[c]) tele.use('생활 단추: ' + ((POI_LIST.filter(function (x) { return x[0] === c; })[0] || [c, c])[1]));
       if (P.on[c]) delete P.on[c]; else P.on[c] = true;
       paint();
       if (o.onChange) o.onChange(Object.keys(P.on));
@@ -6166,6 +6287,7 @@
   // 아니면 위치 지도 + 주변 등산로 지도 모양으로 연다. (자료는 같은 캐시를 함께 쓰므로 두 번 받지 않는다)
   function mtnKey(n) { return String(n || '').replace(/\(.*?\)/g, '').replace(/\s+/g, ''); }
   function openPlaceDetail(category, view) {
+    if (view && !view.__teleSeen) { view.__teleSeen = true; tele.use('상세: ' + category); }
     if ((category === 'BAC' || category === 'BAC+' || category === '산') && !view.__unified) {
       view.__unified = true;
       view.areaTrails = view.areaTrails || (view.lat != null && view.lng != null);
@@ -6822,6 +6944,7 @@
       var navMsg = navBox.querySelector('[data-navmsg]');
       var say = function (t, err) { navMsg.hidden = false; navMsg.className = 'status-line' + (err ? ' err' : ''); navMsg.textContent = t; };
       var go = navBox.querySelector('[data-navgo]');
+      go.addEventListener('click', function () { tele.use('길찾기'); });
       var fromInput = navBox.querySelector('[data-navfrom]');
       // 출발지: 입력한 곳(typed) → 없으면 내 위치. 휴대폰 앱은 내 위치를 스스로 알아서, 입력한 곳만 넘긴다.
       var getFrom = async function (appOnly) {
@@ -7453,6 +7576,7 @@
     var btn = $('admin-btn');
     btn.hidden = false;
     btn.textContent = !a.configured ? '공유 설정' : (a.canEdit ? '공유·관리' : a.guest ? '👤 ' + a.guest.nickname : '주인 로그인');
+    if (a.canEdit && a.configured && state.gUnread) btn.innerHTML = '공유·관리 <span class="err-badge" title="손님 기기에서 생긴 새 오류">⚠ ' + state.gUnread + '</span>';
     // 손님: 닉네임 아래에 "설정"을 작게 붙여 이 단추가 설정으로 들어가는 곳임을 알린다
     btn.classList.toggle('with-sub', !!(a.guest && !a.canEdit));
     if (a.guest && !a.canEdit) btn.innerHTML = '<span class="ab-name">👤 ' + escapeHtml(a.guest.nickname) + '</span><span class="ab-sub">설정</span>';
@@ -7659,43 +7783,123 @@
       loginInto(box, function () { location.href = location.pathname; });
     });
   }
-  // ----- 손님 관리 (주인만): 목록·차단·비밀번호 새로 정하기·삭제
+  // ----- 손님 관리 (주인만): 목록·이름 붙이기·사용 기록·오류·차단·비밀번호 새로 정하기·삭제
+  function checkGuestErrors() {
+    fetch('/api/glog?count=1', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (!j || !j.ok) return;
+      var before = state.gUnread || 0;
+      state.gUnread = j.unread || 0;
+      paintAdminBadge();
+      if (state.gUnread && state.gUnread !== before) showToast('⚠ 손님 기기에서 새 오류 ' + state.gUnread + '건 — 공유·관리 → 손님 관리에서 볼 수 있어요', 6000);
+    }).catch(function () {});
+  }
+  // 주인 화면을 켜 두면 5분마다 새 오류가 있는지 본다
+  setInterval(function () { if (state.auth && state.auth.canEdit && state.auth.configured && document.visibilityState === 'visible') checkGuestErrors(); }, 5 * 60 * 1000);
+  function paintAdminBadge() {
+    var btn = $('admin-btn');
+    if (!btn || !state.auth || !state.auth.canEdit || !state.auth.configured) return;
+    btn.innerHTML = '공유·관리' + (state.gUnread ? ' <span class="err-badge" title="손님 기기에서 생긴 새 오류">⚠ ' + state.gUnread + '</span>' : '');
+  }
   function openGuestAdmin() {
     var sheet = el('<div class="sheet-backdrop full"><div class="sheet page" role="dialog" aria-modal="true">' +
       '<div class="page-head"><h2>손님 관리</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div>' +
       '<div class="page-body"><section class="page-sec">' +
-        '<p class="copy-hint" style="font-size:0.9rem;">공유 링크로 들어와 닉네임을 만든 손님 목록이에요. 비밀번호는 암호화되어 저장돼 나도 볼 수 없고, 잊은 손님에게는 새 비밀번호를 정해 줄 수 있어요. 차단하면 모든 기기에서 바로 로그아웃돼요.</p>' +
+        '<p class="copy-hint" style="font-size:0.9rem;">공유 링크로 들어와 닉네임을 만든 손님 목록이에요. <b>✏️ 이름</b>으로 내가 아는 이름을 붙여 둘 수 있어요(손님에게는 보이지 않아요). 손님이 쓴 기능과 손님 기기에서 생긴 오류도 여기서 볼 수 있어요. 비밀번호는 암호화되어 저장돼 나도 볼 수 없고, 잊은 손님에게는 새 비밀번호를 정해 줄 수 있어요.</p>' +
         '<div class="status-line" data-gamsg hidden></div>' +
+        '<div data-gasum></div>' +
         '<div class="guest-list" data-galist><div class="status-line">불러오는 중...</div></div>' +
       '</section></div></div></div>');
     $('sheet-root').appendChild(sheet);
     document.body.classList.add('no-scroll');
     function close() { sheet.remove(); if (!document.querySelector('.sheet-backdrop.full')) document.body.classList.remove('no-scroll'); }
     sheet.querySelector('[data-close]').addEventListener('click', close);
-    var list = sheet.querySelector('[data-galist]'), msg = sheet.querySelector('[data-gamsg]');
+    var list = sheet.querySelector('[data-galist]'), msg = sheet.querySelector('[data-gamsg]'), sum = sheet.querySelector('[data-gasum]');
     function say(t, err) { msg.hidden = false; msg.className = 'status-line' + (err ? ' err' : ''); msg.textContent = t; }
     function when(ms) { if (!ms) return '-'; var d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+    function ago(ms) {
+      if (!ms) return '-';
+      var m = Math.round((Date.now() - ms) / 60000);
+      if (m < 1) return '방금'; if (m < 60) return m + '분 전';
+      var h = Math.round(m / 60); if (h < 24) return h + '시간 전';
+      var d = Math.round(h / 24); return d < 31 ? d + '일 전' : when(ms).slice(0, 10);
+    }
+    // 사용 기록: 탭·단추 등 많이 쓴 순서 (앞의 "탭: " 같은 말머리는 짧게)
+    function usageHtml(u) {
+      var arr = Object.keys(u || {}).map(function (k) { return [k, u[k]]; }).sort(function (x, y) { return y[1] - x[1]; });
+      if (!arr.length) return '<span class="gr-dev">아직 사용 기록이 없어요</span>';
+      var top = arr.slice(0, 10);
+      return '<div class="gr-use">' + top.map(function (x) { return '<span>' + escapeHtml(x[0]) + '<b>' + x[1] + '</b></span>'; }).join('') +
+        (arr.length > top.length ? '<span>그 밖 ' + (arr.length - top.length) + '가지</span>' : '') + '</div>';
+    }
+    function devHtml(lg) {
+      var d = (lg && lg.devices) || [];
+      if (!d.length) return '';
+      return '<div class="gr-dev">📱 ' + d.map(function (x) { return escapeHtml(x.name) + ' (' + x.w + '×' + x.h + (x.app ? ', 앱으로 설치' : '') + ')'; }).join(' / ') + '</div>';
+    }
+    function errsHtml(lg) {
+      var e = (lg && lg.errors) || [];
+      if (!e.length) return '';
+      var unread = lg.unread || 0;
+      return '<button type="button" class="gr-errbtn' + (unread ? ' new' : '') + '" data-gaerr>⚠ 오류 ' + e.length + '가지' + (unread ? ' · 새 오류 ' + unread : '') + ' 보기</button>' +
+        '<div class="gr-errs" data-gaerrs hidden>' + e.map(function (x, i) {
+          return '<div class="gr-err' + (i < unread ? ' new' : '') + '"><div class="ge-msg">' + escapeHtml(x.msg) + (x.n > 1 ? ' <span class="gr-dev">(' + x.n + '번)</span>' : '') + '</div>' +
+            '<small>' + when(x.at) + (x.view ? ' · ' + escapeHtml(x.view) + ' 화면' : '') + (x.dev ? ' · ' + escapeHtml(x.dev) : '') + '</small>' +
+            (x.where ? '<small>' + escapeHtml(x.where) + '</small>' : '') + '</div>';
+        }).join('') + '<button type="button" class="link-btn" style="margin:0;align-self:flex-start" data-gaclear>이 손님의 오류 기록 지우기</button></div>';
+    }
     function load() {
-      Promise.all([authPost({ action: 'glist' }), loadGStories().then(function () { return gs.items; }).catch(function () { return []; })]).then(function (res) {
-        var r = res[0], posts = res[1] || [];
+      Promise.all([
+        authPost({ action: 'glist' }),
+        loadGStories().then(function () { return gs.items; }).catch(function () { return []; }),
+        fetch('/api/glog', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+      ]).then(function (res) {
+        var r = res[0], posts = res[1] || [], gl = res[2];
         if (!r.ok) { list.innerHTML = '<div class="status-line err">목록을 불러오지 못했어요.</div>'; return; }
-        if (!r.guests.length) { list.innerHTML = '<div class="copy-hint">아직 가입한 손님이 없어요.</div>'; return; }
+        var logs = {}; ((gl && gl.logs) || []).forEach(function (x) { logs[x.id] = x; });
+        var newErr = (gl && gl.unread) || 0;
+        sum.innerHTML = newErr ? '<div class="ga-summary">⚠ 손님 기기에서 <b>새 오류 ' + newErr + '건</b>이 생겼어요. 빨간 단추를 눌러 내용을 보세요. 원인을 모르겠으면 그 화면을 캡처해 Claude 에게 보내 주면 돼요.</div>' : '';
+        var rows = r.guests.slice();
+        if (logs.anon) rows.push({ id: 'anon', nickname: '로그인 전 방문자', realName: '', anon: true, lastSeen: logs.anon.last, status: 'active' });
+        if (!rows.length) { list.innerHTML = '<div class="copy-hint">아직 가입한 손님이 없어요.</div>'; return; }
         var count = {};
         posts.forEach(function (g) { if (g.guestId) count[g.guestId] = (count[g.guestId] || 0) + 1; });
-        list.innerHTML = r.guests.map(function (g) {
-          return '<div class="guest-row' + (g.status === 'blocked' ? ' blocked' : '') + '" data-gid="' + escapeHtml(g.id) + '">' +
-            '<div class="gr-main"><b>' + escapeHtml(g.nickname) + '</b>' + (g.status === 'blocked' ? ' <span class="gs-st hidden">차단됨</span>' : '') +
-              '<small>가입 ' + when(g.createdAt) + ' · 마지막 접속 ' + when(g.lastSeen) + ' · 로그인 기기 ' + g.devices + '대 · 스토리 ' + (count[g.id] || 0) + '건</small></div>' +
-            '<div class="gr-act">' +
+        list.innerHTML = rows.map(function (g) {
+          var lg = logs[g.id];
+          var title = g.realName ? escapeHtml(g.realName) + ' <span class="gr-nick">(' + escapeHtml(g.nickname) + ')</span>' : escapeHtml(g.nickname);
+          var info = g.anon ? '공유 링크로 들어와 아직 로그인하지 않은 기기들 · 마지막 ' + ago(lg && lg.last)
+            : '가입 ' + when(g.createdAt).slice(0, 10) + ' · 마지막 접속 ' + ago(Math.max(g.lastSeen || 0, (lg && lg.last) || 0)) + ' · 방문 ' + ((lg && lg.sessions) || 0) + '번 · 로그인 기기 ' + g.devices + '대 · 스토리 ' + (count[g.id] || 0) + '건';
+          return '<div class="guest-row' + (g.status === 'blocked' ? ' blocked' : '') + '" data-gid="' + escapeHtml(g.id) + '" data-nick="' + escapeHtml(g.nickname) + '" data-real="' + escapeHtml(g.realName || '') + '">' +
+            '<div class="gr-main"><b>' + title + '</b>' + (g.status === 'blocked' ? ' <span class="gs-st hidden">차단됨</span>' : '') + '<small>' + info + '</small></div>' +
+            (g.anon ? '' : '<div class="gr-act">' +
+              '<button type="button" class="link-btn" data-ga="name">✏️ 이름</button>' +
               '<button type="button" class="link-btn" data-ga="' + (g.status === 'blocked' ? 'unblock' : 'block') + '">' + (g.status === 'blocked' ? '차단 풀기' : '차단') + '</button>' +
               '<button type="button" class="link-btn" data-ga="reset">새 비밀번호</button>' +
               '<button type="button" class="link-btn danger-line" data-ga="delete">삭제</button>' +
-            '</div></div>';
+            '</div>') +
+            '<div class="gr-extra">' + devHtml(lg) + (g.anon ? '' : usageHtml(lg && lg.usage)) + errsHtml(lg) + '</div>' +
+          '</div>';
         }).join('');
+        list.querySelectorAll('[data-gaerr]').forEach(function (b) {
+          b.addEventListener('click', function () { var box = b.parentNode.querySelector('[data-gaerrs]'); box.hidden = !box.hidden; });
+        });
+        list.querySelectorAll('[data-gaclear]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var row = b.closest('[data-gid]'), id = row.getAttribute('data-gid');
+            fetch('/api/glog', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, credentials: 'same-origin', body: JSON.stringify({ action: 'clear', id: id === 'anon' ? 'anon' : 'u-' + id }) })
+              .then(function (x) { return x.json(); }).then(function (j) { if (j.ok) { state.gUnread = j.unread || 0; paintAdminBadge(); say('오류 기록을 지웠어요.'); load(); } else say('지우지 못했어요.', true); })
+              .catch(function () { say('연결하지 못했어요.', true); });
+          });
+        });
         list.querySelectorAll('[data-ga]').forEach(function (b) {
           b.addEventListener('click', function () {
             var row = b.closest('[data-gid]'), id = row.getAttribute('data-gid'), act = b.getAttribute('data-ga');
-            var name = row.querySelector('b').textContent;
+            var name = row.getAttribute('data-real') || row.getAttribute('data-nick');
+            if (act === 'name') {
+              var nn = window.prompt('"' + row.getAttribute('data-nick') + '" 손님에게 붙일 이름 (예: 홍길동, 회사 동료 김과장). 나만 보여요. 지우려면 비워 두세요.', row.getAttribute('data-real') || '');
+              if (nn == null) return;
+              authPost({ action: 'gname', id: id, name: nn }).then(function (r2) { if (r2.ok) { say(nn.trim() ? '이름을 "' + nn.trim() + '"(으)로 붙였어요.' : '붙인 이름을 지웠어요.'); load(); } else say('저장하지 못했어요.', true); });
+              return;
+            }
             if (act === 'reset') {
               var np = window.prompt(name + '님의 새 비밀번호 (4자 이상). 정한 비밀번호를 손님에게 알려 주세요.');
               if (np == null) return;
@@ -7711,6 +7915,11 @@
             authPost({ action: 'gstatus', id: id, status: act === 'block' ? 'blocked' : 'active' }).then(function (r2) { if (r2.ok) { say(name + '님을 ' + (act === 'block' ? '차단했어요.' : '다시 쓸 수 있게 했어요.')); load(); } else say('바꾸지 못했어요.', true); });
           });
         });
+        // 이번에 보여 준 새 오류는 "봤음"으로 표시 (다음에 열면 새 오류에서 빠진다)
+        if (newErr) {
+          fetch('/api/glog', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, credentials: 'same-origin', body: JSON.stringify({ action: 'seen' }) })
+            .then(function () { state.gUnread = 0; paintAdminBadge(); }).catch(function () {});
+        }
       }).catch(function () { list.innerHTML = '<div class="status-line err">연결하지 못했어요.</div>'; });
     }
     load();
@@ -7736,7 +7945,7 @@
         '<div class="status-line" data-amsg hidden></div>' +
         '<div class="admin-note"><b>공개 범위</b> — 링크를 받은 사람에게 무엇을 보여줄지 고를 수 있어요.</div>' +
         '<button type="button" class="primary-btn" style="margin-bottom:8px;" data-sharecfg>공개 범위 설정</button>' +
-        '<button type="button" class="primary-btn ghost" style="margin-bottom:8px;" data-guestadm>👥 손님 관리 (닉네임·차단·비밀번호)</button>' +
+        '<button type="button" class="primary-btn ghost" style="margin-bottom:8px;" data-guestadm>👥 손님 관리 (이름·사용 기록·오류·차단)' + (state.gUnread ? ' <span class="err-badge">⚠ 새 오류 ' + state.gUnread + '</span>' : '') + '</button>' +
         '<button type="button" class="primary-btn ghost" style="margin-bottom:14px;" data-myprefs>⚙️ 내 메뉴 설정 (이 기기)</button>' +
         '<div class="admin-note"><b>아이패드·휴대폰에서 고치려면</b> — 그 기기에서 이 사이트를 열고 <b>주인 로그인</b>에 편집 암호를 넣으면 돼요. 한 번 로그인하면 그 기기에서는 계속 고칠 수 있어요.</div>' +
         '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
@@ -7800,6 +8009,7 @@
         '<button type="button" class="primary-btn" style="margin-bottom:8px" data-gprefs>⚙️ 내 메뉴 설정 (관심 분야만 보기)</button>' +
         '<button type="button" class="primary-btn ghost" data-glogout>이 기기에서 로그아웃</button>' +
         '<div class="admin-note" style="margin-top:14px;">비밀번호를 잊었으면 주인에게 새 비밀번호를 받아 주세요.</div>' +
+        '<div class="admin-note" style="margin-top:8px;font-size:0.85rem;">앱을 고치는 데 쓰려고, 어떤 기능을 몇 번 썼는지와 기기 종류, 화면에서 생긴 오류가 주인에게 전달돼요. 내 위치·글 내용·검색어는 보내지 않아요.</div>' +
         '<details class="owner-more"><summary>주인이신가요?</summary><div data-ownerlogin></div></details>';
       body.querySelector('[data-gprefs]').addEventListener('click', function () { sheet.remove(); openPrefs(); });
       body.querySelector('[data-glogout]').addEventListener('click', function () {
@@ -7827,6 +8037,8 @@
     loadPrefs();
     applyAuth();
     authDone();
+    setTimeout(function () { tele.flush(false); }, 4000); // 손님: 방문 1회 기록 (주인은 보내지 않음)
+    if (state.auth.canEdit && state.auth.configured) checkGuestErrors();
     if (state.auth.needGuest) { showGuestGate(); return; }
     if (!state.auth.canView) { showLock(); return; }
     if (state.auth.guest) {

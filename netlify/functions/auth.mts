@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { accessOf, cookie, hashPassword, randomKey, readSettings, writeSettings, readShare, writeShare } from '../../src/lib/auth.mts';
-import { registerGuest, loginGuest, logoutGuest, listGuests, setGuestStatus, resetGuestPassword, deleteGuest, setGuestPrefs } from '../../src/lib/guests.mts';
+import { registerGuest, loginGuest, logoutGuest, listGuests, setGuestStatus, setGuestRealName, resetGuestPassword, deleteGuest, setGuestPrefs } from '../../src/lib/guests.mts';
 
 // 보기/편집 권한 관리.
 //  GET  /api/auth                      → 지금 이 기기가 볼 수 있는지, 고칠 수 있는지
@@ -12,7 +12,7 @@ import { registerGuest, loginGuest, logoutGuest, listGuests, setGuestStatus, res
 //  POST /api/auth {action:'password', password}→ 편집 암호 바꾸기 — 주인만
 //  POST /api/auth {action:'gjoin'|'glogin', nickname, password} → 손님 계정 만들기/로그인 (공유 링크로 들어온 기기만)
 //  POST /api/auth {action:'glogout'}            → 손님 로그아웃(이 기기)
-//  POST /api/auth {action:'glist'|'gstatus'|'greset'|'gdelete', id, status, password} → 손님 관리 — 주인만
+//  POST /api/auth {action:'glist'|'gstatus'|'gname'|'greset'|'gdelete', id, status, name, password} → 손님 관리 — 주인만
 const YEAR = 60 * 60 * 24 * 365;
 const MIN_LEN = 6;
 
@@ -88,6 +88,7 @@ export default async (req: Request, _context: Context) => {
 
     if (action === 'glist') return reply({ ok: true, guests: await listGuests() });
     if (action === 'gstatus') { const g = await setGuestStatus(String(body?.id || ''), String(body?.status || '')); return g ? reply({ ok: true, guest: g }) : reply({ error: 'not found' }, 404); }
+    if (action === 'gname') { const g = await setGuestRealName(String(body?.id || ''), body?.name); return g ? reply({ ok: true, guest: g }) : reply({ error: 'not found' }, 404); }
     if (action === 'greset') {
       if (password.length < 4) return reply({ error: 'password too short', min: 4 }, 400);
       const g = await resetGuestPassword(String(body?.id || ''), password);

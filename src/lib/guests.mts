@@ -19,6 +19,7 @@ export interface Guest {
   lockUntil: number;
   it?: number;
   prefs?: { off: string[]; at: number } | null; // 손님이 고른 "내 메뉴" (끈 분야)
+  realName?: string; // 주인이 따로 적어 두는 이름(지인 실명 등) — 주인만 봄
 }
 const store = () => getStore({ name: 'guests', consistency: 'strong' });
 const MAX_TOKENS = 10;
@@ -46,7 +47,7 @@ async function readGuest(id: string): Promise<Guest | null> {
 }
 async function writeGuest(g: Guest) { await store().setJSON('u-' + g.id, g); }
 export function publicGuest(g: Guest) {
-  return { id: g.id, nickname: g.nickname, createdAt: g.createdAt, lastSeen: g.lastSeen, status: g.status, devices: g.tokens.length };
+  return { id: g.id, nickname: g.nickname, realName: g.realName || '', createdAt: g.createdAt, lastSeen: g.lastSeen, status: g.status, devices: g.tokens.length };
 }
 
 function parseCookie(req: Request, name: string) {
@@ -145,6 +146,15 @@ export async function setGuestStatus(id: string, status: string) {
   if (!g || (status !== 'active' && status !== 'blocked')) return null;
   g.status = status;
   if (status === 'blocked') g.tokens = []; // 차단하면 모든 기기에서 로그아웃
+  await writeGuest(g);
+  cache.clear();
+  return publicGuest(g);
+}
+// 주인이 손님에게 붙여 두는 이름(지인 실명·메모). 손님 화면에는 보이지 않는다.
+export async function setGuestRealName(id: string, name: unknown) {
+  const g = await readGuest(id);
+  if (!g) return null;
+  g.realName = typeof name === 'string' ? name.normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, 30) : '';
   await writeGuest(g);
   cache.clear();
   return publicGuest(g);

@@ -8,4 +8,3 @@
 
 이 저장소에 바뀐 내용이 올라오면 Cloudflare가 자동으로 배포한다.
 비밀 열쇠(VWORLD_KEY 등)는 저장소가 아니라 Cloudflare 설정에 보관한다.
-배포 시험

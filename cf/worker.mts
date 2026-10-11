@@ -34,6 +34,7 @@ import fn_festivals, { config as cfg_festivals } from '../netlify/functions/fest
 import fn_forest, { config as cfg_forest } from '../netlify/functions/forest.mts';
 import fn_golf, { config as cfg_golf } from '../netlify/functions/golf.mts';
 import fn_golfosm, { config as cfg_golfosm } from '../netlify/functions/golfosm.mts';
+import fn_glog, { config as cfg_glog } from '../netlify/functions/glog.mts';
 import fn_gphotos, { config as cfg_gphotos } from '../netlify/functions/gphotos.mts';
 import fn_gstories, { config as cfg_gstories } from '../netlify/functions/gstories.mts';
 import fn_heritage, { config as cfg_heritage } from '../netlify/functions/heritage.mts';
@@ -68,6 +69,7 @@ for (const [fn, cfg] of [
   [fn_forest, cfg_forest],
   [fn_golf, cfg_golf],
   [fn_golfosm, cfg_golfosm],
+  [fn_glog, cfg_glog],
   [fn_gphotos, cfg_gphotos],
   [fn_gstories, cfg_gstories],
   [fn_heritage, cfg_heritage],
