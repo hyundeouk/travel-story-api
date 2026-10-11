@@ -157,7 +157,7 @@
   @keyframes sm-bob { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 6px); } }
   @media (prefers-reduced-motion: reduce) { .scroll-more { animation: none; } }
   .admin-btn { align-self: center; margin-left: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-family: inherit; font-size: 0.72rem; font-weight: 700; padding: 6px 11px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
-  /* 손님(보기 전용)에게는 고치는 단추를 보여주지 않는다. 서버에서도 한 번 더 막는다. */
+  /* 게스트(보기 전용)에게는 고치는 단추를 보여주지 않는다. 서버에서도 한 번 더 막는다. */
   body.viewer #fab-write, body.viewer .import-btn, body.viewer [data-edit], body.viewer [data-delete], body.viewer [data-confirm],
   body.viewer [data-setphoto], body.viewer [data-sethero], body.viewer [data-marksave], body.viewer [data-addstory] { display: none !important; }
   body.viewer [data-visited], body.viewer [data-stars] button, body.viewer [data-note], body.viewer [data-vdate] { pointer-events: none; }
@@ -483,6 +483,30 @@
   .ga-summary { border: 1px solid #f0b4b4; background: #fff4f4; color: #8a1c1c; border-radius: 12px; padding: 9px 12px; margin-bottom: 10px; font-size: 0.9rem; }
   [data-theme="dark"] .ga-summary { background: #3a1d1d; color: #ffd5d5; border-color: #6b2c2c; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ga-summary { background: #3a1d1d; color: #ffd5d5; border-color: #6b2c2c; } }
+  .picks-box { border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--surface); margin-bottom: 14px; }
+  .food-near { border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--surface); }
+  .food-near .place-list { margin-top: 10px; }
+  .picks-box .pk-area { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; margin-top: 8px; width: auto; } .picks-box .pk-area span { margin: 0; white-space: nowrap; } .picks-box .pk-area select { width: auto; min-width: 110px; max-width: 160px; }
+  .picks-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .picks-head .copy-hint { margin: 0; display: inline; }
+  .picks-filter { margin-top: 8px; }
+  .picks-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; margin-top: 10px; }
+  .pick-card { display: flex; gap: 10px; align-items: flex-start; text-align: left; border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--bg); color: var(--ink); font: inherit; cursor: pointer; position: relative; min-width: 0; }
+  .pick-card.st-pending { border-style: dashed; border-color: #f79009; } .pick-card.st-hidden { opacity: 0.6; }
+  .pk-img { flex: none; width: 56px; height: 56px; border-radius: 10px; overflow: hidden; background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 24px; }
+  .pk-img img { width: 100%; height: 100%; object-fit: cover; }
+  .pk-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; } .pk-body b { font-size: 0.95rem; }
+  .pk-body small { color: var(--ink-dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .pk-st { position: absolute; top: 6px; right: 6px; font-size: 11px; background: #f79009; color: #fff; border-radius: 999px; padding: 0 7px; }
+  .picks-sep { grid-column: 1 / -1; color: var(--ink-dim); font-size: 0.85rem; margin: 6px 2px 0; }
+  .pick-results { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; max-height: 260px; overflow-y: auto; }
+  .pick-res, .pick-chosen { display: flex; flex-direction: column; text-align: left; border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+  .pick-chosen { cursor: default; border-color: var(--accent); gap: 2px; } .pick-res small, .pick-chosen small { color: var(--ink-dim); font-size: 12px; }
+  .pk-yt { margin: 4px 0 12px; } .pk-yt summary { cursor: pointer; font-weight: 700; font-size: 0.9rem; margin-bottom: 8px; }
+  .seed-list { display: flex; flex-direction: column; gap: 6px; max-height: 55vh; overflow-y: auto; margin: 10px 0; }
+  .seed-row { display: flex; gap: 8px; align-items: flex-start; border: 1px solid var(--line); border-radius: 10px; padding: 7px 9px; }
+  .seed-row.none { opacity: 0.6; } .seed-row span { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .seed-row small { color: var(--ink-dim); font-size: 12px; }
+  .pk-badge { background: #e8590c; }
   .err-badge { display: inline-block; background: #d92d20; color: #fff; border-radius: 999px; padding: 0 7px; font-size: 0.78em; font-weight: 700; margin-left: 4px; line-height: 1.6; }
   .primary-btn.ghost { background: var(--surface-2); color: var(--ink); }
   .gs-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin: 4px 0 12px; }
@@ -871,6 +895,7 @@
       <button type="button" data-view="golf" role="tab" aria-selected="false">골프</button>
       <button type="button" data-view="weather" role="tab" aria-selected="false">날씨</button>
       <button type="button" data-view="browse" role="tab" aria-selected="false">둘러보기</button>
+      <button type="button" data-view="food" role="tab" aria-selected="false">맛집</button>
       <button type="button" data-view="gstory" role="tab" aria-selected="false">스토리</button>
       <button type="button" data-view="feed" role="tab" aria-selected="false">내 여행 기록</button>
       <button type="button" data-view="mine" role="tab" aria-selected="false">내 장소</button>
@@ -1005,6 +1030,14 @@
       <div id="golf-list" class="place-list"></div>
     </section>
 
+    <section id="view-food" class="view">
+      <div id="food-picks"></div>
+      <section class="food-near">
+        <div class="picks-head"><div><b>📍 내 주변 맛집</b> <span class="copy-hint" data-fnn></span></div><button type="button" class="chip" data-fnre>내 위치 다시 확인</button></div>
+        <div class="copy-hint" style="margin:4px 0 0">내 주변 검색의 맛집 단추와 같은 자료예요 (한국관광공사 · 가까운 순).</div>
+        <div class="place-list" id="food-near-list"></div>
+      </section>
+    </section>
     <section id="view-browse" class="view">
       <div class="filter-panel">
         <label class="filter"><span>카테고리</span>
@@ -1171,12 +1204,12 @@
     }
     return res.json();
   }
-  // ===== 손님 사용 기록 · 오류 알림 =====
-  // 손님 기기에서 어떤 기능을 썼는지(횟수)와 오류를 모아 주인에게 보낸다. 주인 기기는 보내지 않는다.
+  // ===== 게스트 사용 기록 · 오류 알림 =====
+  // 게스트 기기에서 어떤 기능을 썼는지(횟수)와 오류를 모아 운영자에게 보낸다. 운영자 기기는 보내지 않는다.
   // 위치·글 내용·검색어는 보내지 않는다. 같은 오류는 한 번만, 한 번 열 때 최대 15건.
   var tele = (function () {
     var usage = {}, errs = [], seen = {}, nErr = 0, timer = 0, firstSend = true;
-    var VIEW_NAME = { map: '내 주변 검색', mtn: '산', golf: '골프', weather: '날씨', browse: '둘러보기', gstory: '스토리', feed: '내 여행 기록', mine: '내 장소' };
+    var VIEW_NAME = { map: '내 주변 검색', mtn: '산', golf: '골프', weather: '날씨', browse: '둘러보기', food: '맛집', gstory: '스토리', feed: '내 여행 기록', mine: '내 장소' };
     function deviceName() {
       var ua = navigator.userAgent || '', os, br = '';
       if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) os = 'iPad';
@@ -1307,7 +1340,7 @@
       b.classList.toggle('active', on);
       b.setAttribute('aria-selected', on ? 'true' : 'false');
     });
-    ['feed', 'map', 'mtn', 'golf', 'weather', 'browse', 'gstory', 'mine'].forEach(function (v) {
+    ['feed', 'map', 'mtn', 'golf', 'weather', 'browse', 'food', 'gstory', 'mine'].forEach(function (v) {
       $('view-' + v).classList.toggle('active', v === target);
     });
     $('fab-write').hidden = target !== 'feed';
@@ -1317,6 +1350,7 @@
     if (target === 'weather') renderWeatherTab();
     if (target === 'gstory') renderGStories();
     if (target === 'browse') renderBrowse();
+    if (target === 'food') renderFood();
     if (target === 'mine') renderMine();
   }
   document.querySelectorAll('.segmented button').forEach(function (btn) {
@@ -3267,7 +3301,7 @@
     } else if (!entry.pending) golfRetry = 0;
     golfGeocode(entry.items);
   }
-  // 골프장 자료 중 위치(좌표)가 없는 곳은 주인 화면에서 카카오 지도로 주소를 찾아 서버에 저장해 둔다 (한 번만 하면 모두에게 적용).
+  // 골프장 자료 중 위치(좌표)가 없는 곳은 운영자 화면에서 카카오 지도로 주소를 찾아 서버에 저장해 둔다 (한 번만 하면 모두에게 적용).
   var golfGeoRunning = false, golfGeoTried = {};
   async function golfGeocode(items) {
     if (golfGeoRunning || !(state.auth && state.auth.canEdit) || !items) return;
@@ -4830,8 +4864,19 @@
     }));
     // 명소·맛집·행사 (한국관광공사)
     if (want('명소') || want('맛집') || want('행사')) loaded(['명소', '맛집', '행사']);
-    if (want('명소') || want('맛집') || want('행사')) group('명소·맛집·행사', api('nearby?lat=' + pos.lat.toFixed(5) + '&lng=' + pos.lng.toFixed(5)).then(function (j) {
+    if (want('명소') || want('맛집') || want('행사')) group('명소·맛집·행사', Promise.all([
+      api('nearby?lat=' + pos.lat.toFixed(5) + '&lng=' + pos.lng.toFixed(5)),
+      prefOn('near', '맛집') ? loadPicks().catch(function () { return []; }) : Promise.resolve([]),
+    ]).then(function (rs) {
+      var j = rs[0];
       if (seq !== state.mapSeq) return;
+      // 추천 맛집(운영자·게스트 등록, 유튜버 소개)은 진한 주황 핀으로
+      var pn = 0;
+      (rs[1] || []).forEach(function (p) {
+        if (p.lat == null || !near(p.lat, p.lng)) return;
+        nearMarker(map, '맛집', pickView(p), ['맛집'], '#b4380c', (isYt(p) ? '📺 ' : '⭐ ') + p.name, '');
+        pn++;
+      });
       [['명소', j.attractions], ['맛집', j.restaurants], ['행사', j.festivals]].filter(function (pair) { return prefOn('near', pair[0]); }).forEach(function (pair) {
         var cat = pair[0], list = sortNear(pair[1] || [], function (it) { return [Number(it.mapY), Number(it.mapX)]; }).slice(0, NEAR_MAX[cat]);
         var n = 0;
@@ -4841,7 +4886,7 @@
           nearMarker(map, cat, view, [cat], LAYER_COLOR[cat], view.title, 'minor');
           n++;
         });
-        counts[cat] = n;
+        counts[cat] = n + (cat === '맛집' ? pn : 0);
       });
     }));
     // 문화유산 (국가유산청: 걸치는 시·도 × 국보·보물·사적·명승·천연기념물)
@@ -5782,7 +5827,7 @@
     }).catch(function () { return ''; });
   }
   function setupGolf(sheet, category, view, useSrc) {
-    // 코스 지도 그림 (넣기·바꾸기는 주인만, 보기는 손님도)
+    // 코스 지도 그림 (넣기·바꾸기는 운영자만, 보기는 게스트도)
     var courseBox = sheet.querySelector('[data-coursebox]');
     var ckey = view.key ? view.key + ':course' : null;
     function paintCourse() {
@@ -5790,7 +5835,7 @@
       var u = ckey && customUrl(ckey);
       var guest = isGuest();
       var wrap = sheet.querySelector('[data-coursewrap]');
-      if (wrap) wrap.hidden = guest && !u; // 손님에게는 그림이 있을 때만
+      if (wrap) wrap.hidden = guest && !u; // 게스트에게는 그림이 있을 때만
       courseBox.innerHTML = (u ? '<img class="course-img" alt="코스 지도" referrerpolicy="no-referrer" src="' + escapeHtml(u) + '">' : '<div class="copy-hint">골프장 홈페이지나 앱에서 저장해 둔 코스·홀 안내 그림을 넣어 두면 여기에 보여요.</div>') +
         (ckey && !guest ? '<button type="button" class="link-btn" data-courseset>' + (u ? '코스 지도 그림 바꾸기' : '코스 지도 그림 넣기') + '</button>' : '');
       var img = courseBox.querySelector('img');
@@ -5804,7 +5849,7 @@
     }
     customReady.then(paintCourse);
 
-    // 라운드 기록: 이 골프장에서 친 기록(스토리 + 주인의 내 여행 기록) 목록과 기록하기 단추
+    // 라운드 기록: 이 골프장에서 친 기록(스토리 + 운영자의 내 여행 기록) 목록과 기록하기 단추
     var roundsBox = sheet.querySelector('[data-rounds]');
     var roundBtns = sheet.querySelector('[data-roundbtns]');
     var guest = isGuest();
@@ -6505,7 +6550,7 @@
     var cands = [];     // 모은 사진 후보(출처 포함)
     function loadable(p) {
       return new Promise(function (resolve) {
-        if (!p || !p.url || !/^(https:\/\/|\/api\/photos\/|\/img\/)/.test(p.url)) return resolve(false);
+        if (!p || !p.url || !/^(https:\/\/|\/api\/photos\/|\/api\/gphotos\/|\/img\/)/.test(p.url)) return resolve(false);
         var img = new Image();
         if (!p.referrer) img.referrerPolicy = 'no-referrer';
         img.onload = function () { resolve(img.naturalWidth >= 40); };
@@ -6578,6 +6623,7 @@
       if (mine && /^\/api\/photos\//.test(mine)) await addPhotos([{ url: mine, desc: '내가 등록한 사진', referrer: true }]);
       else if (mine) heroUrl = mine;
       if (!heroUrl && view.hero && view.hero.url) heroUrl = view.hero.url;
+      if (view.pickPhotos && view.pickPhotos.length) await addPhotos(view.pickPhotos);
       var d = morePromise ? await morePromise.catch(function () { return null; }) : null;
       var official = [];
       var imgSrc = heritagePromise ? 'heritage' : 'tour';
@@ -6676,6 +6722,7 @@
 
     // ----- 골프장 코스 보기
     if (view.golf && hasCoord) setupGolf(sheet, category, view, useSrc);
+    if (view.pick) setupPick(sheet, view, close);
 
     // ----- 날씨
     if (hasCoord) {
@@ -7210,8 +7257,8 @@
     });
   }
 
-  // ================= 스토리 (주인·손님이 함께 쓰는 글) =================
-  // 손님이 여러 명이어도 링크는 하나라서, 이 브라우저만의 "작성자 열쇠"로 내가 쓴 글을 구분한다.
+  // ================= 스토리 (운영자·게스트가 함께 쓰는 글) =================
+  // 게스트가 여러 명이어도 링크는 하나라서, 이 브라우저만의 "작성자 열쇠"로 내가 쓴 글을 구분한다.
   function authorKey() {
     try {
       var k = localStorage.getItem('ts.authorKey');
@@ -7281,7 +7328,7 @@
           '</div>' +
           '<div class="card-body">' +
             '<h3>' + escapeHtml(g.title || '제목 없음') + '</h3>' +
-            '<div class="card-line gs-by"><b>' + escapeHtml(g.nickname || '손님') + '</b>' + (g.owner ? ' <span class="gs-owner">주인</span>' : '') + (g.mine ? ' <span class="gs-mine">내 글</span>' : '') + ' · ' + escapeHtml(g.date || '') + '</div>' +
+            '<div class="card-line gs-by"><b>' + escapeHtml(g.nickname || '게스트') + '</b>' + (g.owner ? ' <span class="gs-owner">운영자</span>' : '') + (g.mine ? ' <span class="gs-mine">내 글</span>' : '') + ' · ' + escapeHtml(g.date || '') + '</div>' +
             (g.place ? '<div class="card-line"><b>장소:</b> ' + escapeHtml(g.place) + '</div>' : '') +
             (g.golf ? '<div class="card-line sc-line">' + escapeHtml(golfLine(g.golf)) + '</div>' : '') +
             (g.hike ? '<div class="card-line hk-line">' + escapeHtml(hikeLine(g.hike)) + '</div>' : '') +
@@ -7306,7 +7353,7 @@
           '<div class="page-head"><h2>' + escapeHtml(g.title || '') + '</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div>' +
           '<div class="page-body">' +
             '<section class="page-sec">' +
-              '<div class="gs-by"><b>' + escapeHtml(g.nickname || '손님') + '</b>' + (g.owner ? ' <span class="gs-owner">주인</span>' : '') + ' · ' + escapeHtml(g.date || '') +
+              '<div class="gs-by"><b>' + escapeHtml(g.nickname || '게스트') + '</b>' + (g.owner ? ' <span class="gs-owner">운영자</span>' : '') + ' · ' + escapeHtml(g.date || '') +
                 (g.place ? ' · ' + escapeHtml(g.place) : '') + (g.status !== 'ok' ? ' · <span class="gs-st ' + escapeHtml(g.status) + '">' + escapeHtml(G_STATUS[g.status] || '') + '</span>' : '') + '</div>' +
               (urls.length ? '<div class="gs-photos">' + urls.map(function (u, i) { return '<button type="button" data-ph="' + i + '"><img alt="" src="' + u + '"></button>'; }).join('') + '</div>' : '') +
               (g.memo ? '<div class="detail-overview gs-memo">' + escapeHtml(g.memo) + '</div>' : '') +
@@ -7363,7 +7410,7 @@
         '<div class="sheet">' +
           '<div class="sheet-head"><h2>' + (existing ? '스토리 고치기' : '스토리 쓰기') + '</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div>' +
           '<form data-gform>' +
-            '<div class="field"><label for="g-nick">이름(닉네임)</label><input id="g-nick" maxlength="20" placeholder="다른 사람에게 보일 이름"' + (state.auth.guest ? ' readonly' : '') + ' value="' + escapeHtml(state.auth.guest ? state.auth.guest.nickname : (cur.nickname || savedNick() || '주인')) + '"></div>' +
+            '<div class="field"><label for="g-nick">이름(닉네임)</label><input id="g-nick" maxlength="20" placeholder="다른 사람에게 보일 이름"' + (state.auth.guest ? ' readonly' : '') + ' value="' + escapeHtml(state.auth.guest ? state.auth.guest.nickname : (cur.nickname || savedNick() || '운영자')) + '"></div>' +
             '<div class="field"><label for="g-title">제목</label><input id="g-title" maxlength="100" value="' + escapeHtml(cur.title || prefill.title || '') + '"></div>' +
             '<div class="field"><label for="g-date">다녀온 날</label><input type="date" id="g-date" value="' + escapeHtml(cur.date || today) + '"></div>' +
             '<div class="field"><label for="g-region">지역</label><select id="g-region"><option value="">선택 안 함</option>' + SIDO_NAMES.map(function (r) { return '<option' + ((cur.region || '') === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select><div class="copy-hint" data-regauto hidden style="margin-top:0"></div></div>' +
@@ -7373,7 +7420,7 @@
             '<div class="field"><label>사진 (최대 ' + MAXP + '장)</label><div class="gs-pick" data-gpick></div>' +
               '<label class="btn-dashed" data-gaddwrap>사진 고르기<input type="file" accept="image/*" multiple data-gfile style="display:none"></label></div>' +
             '<div class="status-line err" data-gferr hidden></div>' +
-            (isGuest() && gs.approval && !existing ? '<div class="copy-hint">주인이 확인한 뒤 다른 사람에게 보여요.</div>' : '') +
+            (isGuest() && gs.approval && !existing ? '<div class="copy-hint">운영자가 확인한 뒤 다른 사람에게 보여요.</div>' : '') +
             '<button type="submit" class="primary-btn">' + (existing ? '고친 내용 저장' : '올리기') + '</button>' +
           '</form>' +
         '</div>' +
@@ -7460,7 +7507,7 @@
         console.error('[gstory save]', ex);
         btn.disabled = false; btn.textContent = existing ? '고친 내용 저장' : '올리기';
         err.hidden = false;
-        err.textContent = ex && ex.status === 403 ? '지금은 스토리를 쓸 수 없어요(주인이 닫아 두었어요).' : ex && ex.status === 413 ? '사진이 너무 커요.' : '올리지 못했어요. 잠시 뒤 다시 해 주세요.';
+        err.textContent = ex && ex.status === 403 ? '지금은 스토리를 쓸 수 없어요(운영자가 닫아 두었어요).' : ex && ex.status === 413 ? '사진이 너무 커요.' : '올리지 못했어요. 잠시 뒤 다시 해 주세요.';
       }
     });
   }
@@ -7491,16 +7538,16 @@
   });
 
   // ================= 보기 / 편집 권한 =================
-  // 주인: 편집 암호로 로그인한 기기 → 보기 + 고치기.  손님: 공유 링크(?k=...)로 들어온 기기 → 보기만.
+  // 운영자: 편집 암호로 로그인한 기기 → 보기 + 고치기.  게스트: 공유 링크(?k=...)로 들어온 기기 → 보기만.
   // 암호를 아직 정하지 않았으면 예전처럼 누구나 고칠 수 있으므로, 그동안은 Netlify에서 사이트를 비공개로 둔다.
   function authPost(body) {
     return fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (res) { return res.json().catch(function () { return {}; }).then(function (j) { j.status = res.status; return j; }); });
   }
   function shareUrl() { return location.origin + '/?k=' + (state.auth.shareKey || ''); }
-  // 공유 링크로 들어온 손님인지 (보기만 가능)
+  // 공유 링크로 들어온 게스트인지 (보기만 가능)
   function isGuest() { var a = state.auth; return !!(a && a.configured && !a.canEdit && a.canView); }
-  // ===== 내 메뉴: 보는 사람마다 관심 없는 분야를 꺼서 화면을 가볍게 (손님은 계정에 저장 → 어느 기기에서나 같음) =====
+  // ===== 내 메뉴: 보는 사람마다 관심 없는 분야를 꺼서 화면을 가볍게 (게스트는 계정에 저장 → 어느 기기에서나 같음) =====
   var PREF_TOPICS = [
     ['mtn', '⛰️ 산행', '산 탭 · 100대명산·명산100+·종주 코스·숲길·둘레길'],
     ['forest', '🌲 휴양림', '자연휴양림'],
@@ -7522,7 +7569,7 @@
     layer: { 숲길: 'mtn', 종주: 'mtn', 'BAC+': 'mtn', 산: 'mtn', 휴양림: 'forest', 골프장: 'golf', 명소: 'sight', 문화유산: 'heritage', 행사: 'festival', 맛집: 'food' },
     near: { 산: 'mtn', BAC: 'mtn', 'BAC+': 'mtn', 봉: 'mtn', 종주: 'mtn', 골프: 'golf', 휴양림: 'forest', 명소: 'sight', 문화유산: 'heritage', 행사: 'festival', 맛집: 'food' },
     cat: { 숲길: 'mtn', 둘레길: 'mtn', 휴양림: 'forest', 명소: 'sight', 문화유산: 'heritage', 행사: 'festival', 맛집: 'food' },
-    tab: { golf: 'golf', weather: 'weather', gstory: 'gstory', mtn: 'mtn' },
+    tab: { golf: 'golf', weather: 'weather', gstory: 'gstory', mtn: 'mtn', food: 'food' },
   };
   state.prefsOff = {};
   function prefOn(kind, key) { var t = TOPIC_OF[kind] && TOPIC_OF[kind][key]; return !t || !state.prefsOff[t]; }
@@ -7614,32 +7661,374 @@
       showToast('메뉴를 바꿨어요');
     });
   }
+  // ================= 추천 맛집 (운영자·게스트가 등록 · 먹방 유튜버가 소개한 곳 포함) =================
+  // 유튜버 정보는 "그 영상에 나왔다"는 사실과 원래 영상 주소만 둔다 (영상·썸네일·글은 가져오지 않는다).
+  var picksCache = { at: 0, items: null, p: null };
+  state.pickFilter = '';
+  function loadPicks(force) {
+    if (!force && picksCache.items && Date.now() - picksCache.at < 60000) return Promise.resolve(picksCache.items);
+    if (!force && picksCache.p) return picksCache.p;
+    picksCache.p = gapi('picks').then(function (j) { picksCache.items = j.items || []; picksCache.at = Date.now(); picksCache.p = null; return picksCache.items; })
+      .catch(function (e) { picksCache.p = null; throw e; });
+    return picksCache.p;
+  }
+  function isYt(p) { return !!(p.video || p.youtuber); }
+  function isChannel(u) { return /youtube\.com\/@/.test(u || ''); }
+  function pickBy(p) { return p.byOwner ? '운영자' : (p.by || '게스트'); }
+  function pickBadge(p) { return isYt(p) ? '📺 ' + (p.youtuber || '유튜버') + (p.show ? ' · ' + p.show : '') : p.byOwner ? '⭐ 운영자 추천' : '👥 게스트 추천'; }
+  var PICK_STATUS = { ok: '공개', pending: '운영자 확인 대기', hidden: '숨김' };
+  function pickView(p) {
+    return {
+      title: p.name, sub: [pickBadge(p), p.cat].filter(Boolean).join(' · '), badge: '추천 맛집', overview: null,
+      rows: [
+        ['추천 메뉴', p.menu], ['한줄평', p.review],
+        [isChannel(p.video) ? '유튜브' : '소개 영상', p.video, 'link', '📺 ' + (p.youtuber || '유튜버') + (isChannel(p.video) ? ' 유튜브 채널' : (p.show ? ' 「' + p.show + '」' : '') + ' 영상 보기 (유튜브)')],
+        ['출처', p.src, 'link', '방문·소개 기사 보기'],
+        ['주소', p.road || p.address], ['전화', p.phone],
+        ['카카오맵', p.kurl, 'link', '카카오맵에서 보기'],
+        ['등록', pickBy(p) + (p.status !== 'ok' ? ' · ' + (PICK_STATUS[p.status] || p.status) : '')],
+      ],
+      place: p.road || p.address, mapQuery: p.name, tel: p.phone, lat: p.lat, lng: p.lng,
+      key: 'pk:' + p.id, ph: '🍜', srcName: '추천 맛집 (운영자·게스트 등록)', pick: p,
+      pickPhotos: (p.photoIds || []).map(function (id) { return { url: gPhotoUrl(id), desc: pickBy(p) + (p.byOwner ? '' : '님') + '이 올린 사진', referrer: true }; }),
+      detailApi: null,
+    };
+  }
+  function openPick(p) { tele.use('추천 맛집 보기'); openPlaceDetail('맛집', pickView(p)); }
+  function refreshPicksViews() {
+    picksCache.items = null;
+    if (state.view === 'food') renderFood();
+    if (state.view === 'map' && state.nearOn && state.nearOn['맛집']) renderMap();
+  }
+  // ----- 맛집 탭: 추천 맛집 + 내 주변 맛집(한국관광공사, 내 주변 검색의 맛집과 같은 자료)
+  var foodSeq = 0;
+  function renderFood(reloc) {
+    var seq = ++foodSeq;
+    var top = $('food-picks');
+    top.innerHTML = '';
+    top.appendChild(picksSection());
+    var list = $('food-near-list'), note = document.querySelector('#view-food [data-fnn]');
+    list.innerHTML = SKELETON;
+    note.textContent = '내 위치 확인 중...';
+    locate(!!reloc).then(function (pos) {
+      if (seq !== foodSeq) return;
+      pos = pos || state.nearPos || geo.pos;
+      if (!pos) { list.innerHTML = '<div class="empty-state"><strong>내 위치를 알 수 없어요</strong>위치 사용을 허용하면 주변 맛집을 가까운 순으로 보여 드려요.</div>'; note.textContent = ''; return; }
+      note.textContent = '불러오는 중...';
+      return api('nearby?lat=' + pos.lat.toFixed(5) + '&lng=' + pos.lng.toFixed(5)).then(function (j) {
+        if (seq !== foodSeq) return;
+        var items = (j.restaurants || []).map(function (it) { var la = Number(it.mapY), lo = Number(it.mapX); return { it: it, d: la && lo ? distKm(pos.lat, pos.lng, la, lo) : 1e9 }; })
+          .filter(function (x) { return x.d <= 40; }).sort(function (a, b) { return a.d - b.d; }).map(function (x) { return x.it; });
+        note.textContent = items.length + '곳 · 가까운 순';
+        list.innerHTML = '';
+        if (!items.length) { list.appendChild(el('<div class="empty-state"><strong>주변 맛집 자료가 없어요</strong>위치를 옮겨 다시 확인해 보세요.</div>')); return; }
+        items.forEach(function (it) { list.appendChild(placeCard('맛집', it)); });
+      });
+    }).catch(function () { if (seq === foodSeq) { list.innerHTML = '<div class="status-line err">주변 맛집을 불러오지 못했어요.</div>'; note.textContent = ''; } });
+  }
+  document.querySelector('#view-food [data-fnre]').addEventListener('click', function () { renderFood(true); });
+  // 상세 화면 아래: 비공식 안내 + 운영자(공개·숨기기)·올린 사람(고치기·지우기) 단추
+  function setupPick(sheet, view, closeDetail) {
+    var p = view.pick; if (!p) return;
+    var owner = !!(state.auth && state.auth.canEdit);
+    var top = sheet.querySelector('.pd-top'); var after = top ? top.closest('.page-sec') : null;
+    var html = '<div class="copy-hint">' + (isYt(p) ? '먹방 유튜버가 방문·소개한 가게라는 사실과 원래 영상(채널)·기사 주소만 적어 둔 <b>비공식</b> 정보예요. 유튜버와는 관계가 없고, 영업 여부·메뉴는 바뀔 수 있어요.' : '운영자·게스트가 직접 다녀와서 추천한 곳이에요. 영업 여부·메뉴는 바뀔 수 있어요.') + '</div>';
+    if (p.status === 'pending') html += '<div class="status-line">⏳ 운영자 확인 대기 중이에요 — 확인되면 다른 게스트에게도 보여요.</div>';
+    if (p.status === 'hidden') html += '<div class="status-line">🙈 숨긴 맛집이에요 (운영자만 보여요).</div>';
+    var btns = [];
+    if (owner && p.status !== 'ok') btns.push('<button type="button" class="chip" data-pk="ok">✅ 공개하기</button>');
+    if (owner && p.status !== 'hidden') btns.push('<button type="button" class="chip" data-pk="hidden">🙈 숨기기</button>');
+    if (owner || p.mine) btns.push('<button type="button" class="chip" data-pk="edit">✏️ 고치기</button>', '<button type="button" class="chip" data-pk="del">🗑 지우기</button>');
+    if (btns.length) html += '<div class="chip-row">' + btns.join('') + '</div>';
+    var sec = el('<section class="page-sec pick-sec"><h3>🍜 추천 맛집</h3>' + html + '</section>');
+    if (after) after.insertAdjacentElement('afterend', sec);
+    sec.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-pk]'); if (!b) return;
+      var act = b.getAttribute('data-pk');
+      if (act === 'edit') { closeDetail(); openPickForm(p); return; }
+      if (act === 'del') {
+        if (b.getAttribute('data-sure') !== '1') { b.setAttribute('data-sure', '1'); b.textContent = '정말 지우기'; return; }
+        gapi('picks/' + p.id, { method: 'DELETE' }).then(function () { showToast('지웠어요'); closeDetail(); refreshPicksViews(); checkGuestErrors(); }).catch(function () { showToast('지우지 못했어요'); });
+        return;
+      }
+      gapi('picks/' + p.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: act }) })
+        .then(function () { showToast(act === 'ok' ? '공개했어요 — 이제 모든 게스트에게 보여요' : '숨겼어요'); closeDetail(); refreshPicksViews(); checkGuestErrors(); })
+        .catch(function () { showToast('바꾸지 못했어요'); });
+    });
+  }
+  // 둘러보기 → 맛집 맨 위: 추천 맛집 목록
+  function picksSection() {
+    var owner = !!(state.auth && state.auth.canEdit);
+    var box = el('<section class="picks-box">' +
+      '<div class="picks-head"><div><b>🍜 추천 맛집</b> <span class="copy-hint" data-pkn></span></div><button type="button" class="chip picks-add" data-pkadd>＋ 맛집 등록</button></div>' +
+      '<div class="chip-row picks-filter" data-pkf>' + [['', '전체'], ['yt', '📺 유튜버 맛집'], ['rec', '⭐ 운영자·게스트 추천'], ['mine', '내가 올린 곳']].concat(owner ? [['pending', '⏳ 확인 대기']] : []).map(function (f) {
+        return '<button type="button" class="chip' + (state.pickFilter === f[0] ? ' active' : '') + '" data-f="' + f[0] + '">' + f[1] + '</button>';
+      }).join('') + '</div>' +
+      '<label class="filter pk-area"><span>지역</span><select data-pkarea><option value="">전국</option>' + SIDO_NAMES.map(function (r) { return '<option' + (state.pickArea === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select></label>' +
+      (owner ? '<div data-pkseed></div>' : '') +
+      '<div class="picks-list" data-pklist><div class="status-line">불러오는 중...</div></div></section>');
+    box.querySelector('[data-pkadd]').addEventListener('click', function () { openPickForm(null); });
+    box.querySelector('[data-pkarea]').addEventListener('change', function () { state.pickArea = this.value; paint(); });
+    box.querySelector('[data-pkf]').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-f]'); if (!b) return;
+      state.pickFilter = b.getAttribute('data-f');
+      box.querySelectorAll('[data-pkf] .chip').forEach(function (c) { c.classList.toggle('active', c === b); });
+      paint();
+    });
+    var all = [];
+    function paint() {
+      var label = state.pickArea || '';
+      var f = state.pickFilter;
+      var here = state.nearPos || geo.pos;
+      var items = all.filter(function (p) {
+        if (label && label !== '전국' && p.sido !== label) return false;
+        if (f === 'yt') return isYt(p);
+        if (f === 'rec') return !isYt(p);
+        if (f === 'mine') return p.mine;
+        if (f === 'pending') return p.status === 'pending';
+        return true;
+      });
+      var pend = all.filter(function (p) { return p.status === 'pending'; }).length;
+      if (here) items.forEach(function (p) { p._d = p.lat != null ? distKm(here.lat, here.lng, p.lat, p.lng) : 9999; });
+      if (here) items.sort(function (x, y) { return x._d - y._d; });
+      box.querySelector('[data-pkn]').textContent = all.length + '곳' + (label ? ' · ' + label + ' ' + items.length + '곳' : '') + (here ? ' · 가까운 순' : '') + (owner && pend ? ' · 확인 대기 ' + pend + '곳' : '');
+      var list = box.querySelector('[data-pklist]');
+      if (!items.length) { list.innerHTML = '<div class="copy-hint">' + (all.length ? '조건에 맞는 맛집이 없어요.' : '아직 등록된 추천 맛집이 없어요. 다녀온 맛집을 등록해 보세요!') + '</div>'; return; }
+      items = items.slice(0, 300);
+      list.innerHTML = items.map(function (p, i) {
+        var img = p.photoIds && p.photoIds[0] ? '<img alt="" loading="lazy" src="' + escapeHtml(gPhotoUrl(p.photoIds[0])) + '">' : '<span>' + (isYt(p) ? '📺' : '🍜') + '</span>';
+        return '<button type="button" class="pick-card' + (p.status !== 'ok' ? ' st-' + p.status : '') + '" data-i="' + i + '">' +
+          '<span class="pk-img">' + img + '</span><span class="pk-body"><b>' + escapeHtml(p.name) + '</b>' +
+          '<small>' + escapeHtml(pickBadge(p)) + (p.sido ? ' · ' + escapeHtml(p.sido) : '') + (p._d != null && p._d < 9999 ? ' · ' + (p._d < 1 ? Math.round(p._d * 1000) + 'm' : (Math.round(p._d * 10) / 10) + 'km') : '') + '</small>' +
+          (p.menu ? '<small>🍽 ' + escapeHtml(p.menu) + '</small>' : '') +
+          (p.review ? '<small class="pk-rev">“' + escapeHtml(p.review) + '”</small>' : '') + '</span>' +
+          (p.status !== 'ok' ? '<span class="pk-st">' + (p.status === 'pending' ? '확인 대기' : '숨김') + '</span>' : '') + '</button>';
+      }).join('');
+      list.querySelectorAll('[data-i]').forEach(function (b) { b.addEventListener('click', function () { openPick(items[Number(b.getAttribute('data-i'))]); }); });
+    }
+    loadPicks().then(function (items) {
+      all = items.slice();
+      paint();
+      if (owner) seedButton(box.querySelector('[data-pkseed]'), all);
+    }).catch(function () { box.querySelector('[data-pklist]').innerHTML = '<div class="status-line err">추천 맛집을 불러오지 못했어요.</div>'; });
+    return box;
+  }
+  // ----- 운영자: 먹방 유튜버 맛집 기본 목록 넣기 (카카오 장소에서 찾아 확인한 뒤 등록)
+  function seedButton(slot, have) {
+    fetch('/data/yt-picks.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (!j || !slot.isConnected) return;
+      var done = {}; have.forEach(function (p) { if (p.seed) done[p.seed] = 1; });
+      var left = (j.items || []).filter(function (s) { return !done[s.seed]; });
+      if (!left.length) return;
+      slot.innerHTML = '<button type="button" class="link-btn" style="margin:6px 0 0">📺 유튜버 맛집 기본 목록 넣기 (' + left.length + '곳 남음)</button>';
+      slot.firstChild.addEventListener('click', function () { openSeedImport(left); });
+    }).catch(function () {});
+  }
+  function kakaoPlaces() {
+    return loadNaver().catch(function () {}).then(function () {
+      return window.kakao && kakao.maps && kakao.maps.services ? new kakao.maps.services.Places() : null;
+    });
+  }
+  function kakaoSearch(q, opt) {
+    return kakaoPlaces().then(function (P) {
+      if (!P) return [];
+      return new Promise(function (resolve) {
+        P.keywordSearch(q, function (res, st) { resolve(st === kakao.maps.services.Status.OK ? res : []); }, Object.assign({ size: 10 }, opt || {}));
+      });
+    });
+  }
+  function placeFromKakao(r) {
+    return { kakaoId: String(r.id), name: r.place_name, address: r.address_name || '', road: r.road_address_name || '', phone: r.phone || '',
+      lat: Number(r.y), lng: Number(r.x), kurl: String(r.place_url || '').replace(/^http:/, 'https:'), cat: String(r.category_name || '').split(' > ').slice(-1)[0] || '' };
+  }
+  function openSeedImport(seeds) {
+    var sheet = el('<div class="sheet-backdrop"><div class="sheet"><div class="sheet-head"><h2>📺 유튜버 맛집 기본 목록</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div>' +
+      '<div class="admin-note">먹방 유튜버가 방문·소개한 가게를 카카오 지도에서 찾았어요. <b>가게 이름·주소가 맞는지 보고</b> 맞는 것만 체크한 채 등록하세요. 체크가 꺼진 곳은 자동으로 확신하지 못한 곳이에요(다른 지점·동명 가게일 수 있음). 유튜버와 관계없는 비공식 정보로, 원래 영상 주소만 함께 남겨요.</div>' +
+      '<div class="seed-list" data-sl><div class="status-line">카카오 지도에서 찾는 중...</div></div>' +
+      '<div class="status-line" data-smsg hidden></div>' +
+      '<button type="button" class="primary-btn" data-sgo disabled>체크한 곳 등록</button></div></div>');
+    $('sheet-root').appendChild(sheet);
+    function close() { sheet.remove(); }
+    sheet.querySelector('[data-close]').addEventListener('click', close);
+    var listBox = sheet.querySelector('[data-sl]'), go = sheet.querySelector('[data-sgo]'), msg = sheet.querySelector('[data-smsg]');
+    var rows = [];
+    (async function () {
+      for (var i = 0; i < seeds.length; i++) {
+        var s = seeds[i];
+        var res = await kakaoSearch(s.q);
+        var food = res.filter(function (r) { return r.category_group_code === 'FD6' || r.category_group_code === 'CE7'; });
+        var core = String(s.name).replace(/\s+/g, '');
+        var named = food.filter(function (r) { return String(r.place_name).replace(/\s+/g, '').indexOf(core) >= 0; });
+        var hinted = s.hint ? named.filter(function (r) { return (r.road_address_name + ' ' + r.address_name).indexOf(s.hint) >= 0; }) : [];
+        var best = hinted[0] || named[0] || food[0] || null;
+        rows.push({ s: s, r: best, sure: !!(best && (hinted.length || (!s.hint && named.length === 1))) });
+        listBox.querySelector('.status-line').textContent = '카카오 지도에서 찾는 중... (' + (i + 1) + '/' + seeds.length + ')';
+      }
+      if (!sheet.isConnected) return;
+      listBox.innerHTML = rows.map(function (x, i) {
+        var s = x.s, r = x.r;
+        return '<label class="seed-row' + (r ? '' : ' none') + '"><input type="checkbox" data-k="' + i + '"' + (x.sure ? ' checked' : '') + (r ? '' : ' disabled') + '>' +
+          '<span><b>' + escapeHtml(s.name) + '</b> <small>📺 ' + escapeHtml(s.youtuber + (s.show ? ' · ' + s.show : '')) + ' · ' + escapeHtml(s.menu) + '</small>' +
+          (r ? '<small>→ ' + escapeHtml(r.place_name) + ' · ' + escapeHtml(r.road_address_name || r.address_name) + (x.sure ? '' : ' <b style="color:var(--danger)">(확인 필요)</b>') + '</small>' : '<small style="color:var(--danger)">카카오 지도에서 찾지 못했어요</small>') +
+          '<small><a href="' + escapeHtml(s.video) + '" target="_blank" rel="noopener">' + (isChannel(s.video) ? '채널' : '영상') + ' 보기</a>' + (s.src ? ' · <a href="' + escapeHtml(s.src) + '" target="_blank" rel="noopener">출처 기사</a>' : '') + (r && r.place_url ? ' · <a href="' + escapeHtml(r.place_url) + '" target="_blank" rel="noopener">카카오맵</a>' : '') + '</small></span></label>';
+      }).join('');
+      function count() { var n = listBox.querySelectorAll('input:checked').length; go.disabled = !n; go.textContent = n ? '체크한 ' + n + '곳 등록' : '체크한 곳 등록'; }
+      listBox.addEventListener('change', count); count();
+    })();
+    go.addEventListener('click', async function () {
+      var picks = Array.prototype.map.call(listBox.querySelectorAll('input:checked'), function (c) { return rows[Number(c.getAttribute('data-k'))]; });
+      go.disabled = true;
+      var ok = 0, dup = 0, fail = 0;
+      for (var i = 0; i < picks.length; i++) {
+        var x = picks[i];
+        go.textContent = '등록하는 중... (' + (i + 1) + '/' + picks.length + ')';
+        var body = Object.assign(placeFromKakao(x.r), { seed: x.s.seed, video: x.s.video, youtuber: x.s.youtuber, show: x.s.show || '', menu: x.s.menu, src: x.s.src || '' });
+        try { await gapi('picks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); ok++; }
+        catch (e) { if (e.status === 409) dup++; else fail++; }
+      }
+      msg.hidden = false;
+      msg.textContent = ok + '곳을 등록했어요' + (dup ? ' · 이미 있던 곳 ' + dup : '') + (fail ? ' · 실패 ' + fail : '') + '.';
+      go.textContent = '닫기'; go.disabled = false;
+      go.onclick = close;
+      refreshPicksViews();
+    });
+  }
+  // ----- 맛집 등록·고치기 (운영자·게스트)
+  function openPickForm(existing) {
+    var cur = existing || null;
+    var owner = !!(state.auth && state.auth.canEdit);
+    var sel = cur ? { kakaoId: cur.kakaoId, name: cur.name, address: cur.address, road: cur.road, phone: cur.phone, lat: cur.lat, lng: cur.lng, kurl: cur.kurl, cat: cur.cat } : null;
+    var photos = cur ? (cur.photoIds || []).map(function (id) { return { id: id, url: gPhotoUrl(id) }; }) : [];
+    var MAXP = 5;
+    var sheet = el('<div class="sheet-backdrop"><div class="sheet"><div class="sheet-head"><h2>' + (cur ? '맛집 고치기' : '🍜 맛집 등록') + '</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div>' +
+      '<form data-pform>' +
+        '<div class="field"><label>가게</label><div data-psel></div>' +
+          '<div class="share-row" data-psearch><input data-pq placeholder="가게 이름 (예: 필동면옥, 을지로 노가리)" maxlength="50"><button type="button" class="link-btn" style="margin:0" data-pfind>찾기</button></div>' +
+          '<div class="pick-results" data-pres></div></div>' +
+        '<div class="field"><label for="pk-menu">추천 메뉴</label><input id="pk-menu" maxlength="100" placeholder="예: 평양냉면, 수육" value="' + escapeHtml(cur ? cur.menu || '' : '') + '"></div>' +
+        '<div class="field"><label for="pk-rev">한줄평</label><textarea id="pk-rev" maxlength="300" rows="3" placeholder="어떤 점이 좋았는지 (맛, 양, 분위기, 웨이팅 등)">' + escapeHtml(cur ? cur.review || '' : '') + '</textarea></div>' +
+        '<details class="pk-yt"' + (cur && cur.video ? ' open' : '') + '><summary>📺 먹방 유튜버가 소개한 곳이면 (선택)</summary>' +
+          '<div class="field"><label for="pk-video">유튜브 영상(또는 채널) 주소</label><input id="pk-video" inputmode="url" maxlength="200" placeholder="https://youtu.be/..." value="' + escapeHtml(cur ? cur.video || '' : '') + '"></div>' +
+          '<div class="field" style="display:flex;gap:8px"><input id="pk-yter" maxlength="30" placeholder="유튜버 (예: 성시경)" value="' + escapeHtml(cur ? cur.youtuber || '' : '') + '"><input id="pk-show" maxlength="30" placeholder="채널·코너 (예: 먹을텐데)" value="' + escapeHtml(cur ? cur.show || '' : '') + '"></div>' +
+          '<div class="copy-hint">영상 주소만 남기고, 영상 화면이나 글은 옮겨 오지 않아요.</div></details>' +
+        '<div class="field"><label>사진 (최대 ' + MAXP + '장)</label><div class="gs-pick" data-ppick></div>' +
+          '<label class="btn-dashed" data-paddwrap>사진 고르기<input type="file" accept="image/*" multiple data-pfile style="display:none"></label></div>' +
+        '<div class="status-line err" data-perr hidden></div>' +
+        (!owner ? '<div class="copy-hint">운영자가 확인한 뒤 다른 게스트에게도 보여요.</div>' : '') +
+        '<button type="submit" class="primary-btn">' + (cur ? '고친 내용 저장' : '등록하기') + '</button>' +
+      '</form></div></div>');
+    $('sheet-root').appendChild(sheet);
+    function close() { sheet.remove(); }
+    sheet.querySelector('[data-close]').addEventListener('click', close);
+    var err = sheet.querySelector('[data-perr]');
+    function fail(t) { err.hidden = false; err.textContent = t; }
+    var selBox = sheet.querySelector('[data-psel]'), resBox = sheet.querySelector('[data-pres]'), qIn = sheet.querySelector('[data-pq]');
+    function paintSel() {
+      selBox.innerHTML = sel ? '<div class="pick-chosen"><b>' + escapeHtml(sel.name) + '</b><small>' + escapeHtml([sel.cat, sel.road || sel.address].filter(Boolean).join(' · ')) + '</small>' +
+        (cur ? '' : '<button type="button" class="link-btn" style="margin:0" data-pchange>다른 가게</button>') + '</div>' : '';
+      sheet.querySelector('[data-psearch]').hidden = !!sel;
+      if (sel) resBox.innerHTML = '';
+      var ch = selBox.querySelector('[data-pchange]');
+      if (ch) ch.addEventListener('click', function () { sel = null; paintSel(); qIn.focus(); });
+    }
+    paintSel();
+    function find() {
+      var q = qIn.value.trim();
+      if (q.length < 2) { resBox.innerHTML = '<div class="copy-hint">가게 이름을 두 글자 이상 적어 주세요.</div>'; return; }
+      resBox.innerHTML = '<div class="status-line">찾는 중...</div>';
+      var c = state.nearPos || geo.pos;
+      kakaoSearch(q, c && window.kakao ? { location: new kakao.maps.LatLng(c.lat, c.lng) } : null).then(function (res) {
+        if (!sheet.isConnected) return;
+        res = res.slice().sort(function (x, y) { var fx = /FD6|CE7/.test(x.category_group_code) ? 0 : 1, fy = /FD6|CE7/.test(y.category_group_code) ? 0 : 1; return fx - fy; });
+        if (!res.length) { resBox.innerHTML = '<div class="copy-hint">찾지 못했어요. 지역 이름을 함께 넣어 보세요 (예: 필동면옥 충무로).</div>'; return; }
+        resBox.innerHTML = res.map(function (r, i) {
+          return '<button type="button" class="pick-res" data-r="' + i + '"><b>' + escapeHtml(r.place_name) + '</b><small>' + escapeHtml(String(r.category_name || '').split(' > ').slice(-1)[0] + ' · ' + (r.road_address_name || r.address_name)) + '</small></button>';
+        }).join('');
+        resBox.querySelectorAll('[data-r]').forEach(function (b) { b.addEventListener('click', function () { sel = placeFromKakao(res[Number(b.getAttribute('data-r'))]); paintSel(); }); });
+      });
+    }
+    sheet.querySelector('[data-pfind]').addEventListener('click', find);
+    qIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); find(); } });
+    var pick = sheet.querySelector('[data-ppick]');
+    function paintPick() {
+      pick.innerHTML = photos.map(function (p, i) { return '<span class="gs-thumb"><img alt="" src="' + escapeHtml(p.url) + '"><button type="button" data-rm="' + i + '" aria-label="빼기">✕</button></span>'; }).join('');
+      pick.querySelectorAll('[data-rm]').forEach(function (b) { b.addEventListener('click', function () { photos.splice(Number(b.getAttribute('data-rm')), 1); paintPick(); }); });
+      sheet.querySelector('[data-paddwrap]').hidden = photos.length >= MAXP;
+    }
+    paintPick();
+    sheet.querySelector('[data-pfile]').addEventListener('change', function (e) {
+      var files = Array.prototype.slice.call(e.target.files || []);
+      var room = MAXP - photos.length;
+      files.slice(0, room).forEach(function (f) { photos.push({ file: f, url: URL.createObjectURL(f) }); });
+      if (files.length > room) fail('사진은 ' + MAXP + '장까지 올릴 수 있어요.');
+      e.target.value = '';
+      paintPick();
+    });
+    var form = sheet.querySelector('[data-pform]');
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var btn = form.querySelector('.primary-btn');
+      var menu = sheet.querySelector('#pk-menu').value.trim(), review = sheet.querySelector('#pk-rev').value.trim();
+      var video = sheet.querySelector('#pk-video').value.trim();
+      if (!sel) return fail('먼저 가게를 찾아서 골라 주세요.');
+      if (video && !/^https:\/\/(www\.|m\.)?(youtube\.com\/(watch\?v=|shorts\/|live\/|@)|youtu\.be\/)[\w.-]{2,}/.test(video)) return fail('유튜브 영상 주소를 확인해 주세요 (https://youtu.be/... 또는 https://www.youtube.com/watch?v=...).');
+      if (!menu && !review && !video) return fail('추천 메뉴나 한줄평을 적어 주세요.');
+      err.hidden = true; btn.disabled = true;
+      try {
+        var ids = [];
+        for (var i = 0; i < photos.length; i++) {
+          var p = photos[i];
+          if (p.id) { ids.push(p.id); continue; }
+          btn.textContent = '사진 올리는 중... (' + (i + 1) + '/' + photos.length + ')';
+          var blob = await shrinkImage(p.file);
+          var up = await gapi('gphotos', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+          p.id = up.id; ids.push(up.id);
+        }
+        btn.textContent = '저장하는 중...';
+        var body = Object.assign({}, sel, { menu: menu, review: review, video: video.replace(/^https:\/\/m\./, 'https://www.'),
+          youtuber: sheet.querySelector('#pk-yter').value.trim(), show: sheet.querySelector('#pk-show').value.trim(), photoIds: ids });
+        var j = await gapi(cur ? 'picks/' + cur.id : 'picks', { method: cur ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (!cur) tele.use('맛집 등록');
+        close();
+        showToast(cur ? '고쳤어요' + (owner ? '' : ' — 운영자가 다시 확인한 뒤 보여요') : owner ? '맛집을 등록했어요' : '등록했어요! 운영자가 확인하면 다른 게스트에게도 보여요');
+        refreshPicksViews();
+        if (j && j.item && !cur) setTimeout(function () { openPick(j.item); }, 300);
+      } catch (ex) {
+        btn.disabled = false; btn.textContent = cur ? '고친 내용 저장' : '등록하기';
+        if (ex.status === 409) {
+          var ex2 = ex.body && ex.body.item;
+          fail('이미 등록된 맛집이에요.' + (ex2 ? '' : ' (운영자 확인을 기다리는 중일 수 있어요)'));
+          if (ex2) { close(); openPick(ex2); }
+        } else fail('저장하지 못했어요. 잠시 뒤 다시 해 주세요.');
+      }
+    });
+  }
   function guestShare() { return isGuest() ? (state.auth.share || null) : null; }
   function applyAuth() {
     var a = state.auth;
     document.body.classList.toggle('viewer', !a.canEdit);
     var btn = $('admin-btn');
     btn.hidden = false;
-    btn.textContent = !a.configured ? '공유 설정' : (a.canEdit ? '공유·관리' : a.guest ? '👤 ' + a.guest.nickname : '주인 로그인');
-    if (a.canEdit && a.configured && state.gUnread) btn.innerHTML = '공유·관리 <span class="err-badge" title="손님 기기에서 생긴 새 오류">⚠ ' + state.gUnread + '</span>';
-    // 손님: 닉네임 아래에 "설정"을 작게 붙여 이 단추가 설정으로 들어가는 곳임을 알린다
+    btn.textContent = !a.configured ? '공유 설정' : (a.canEdit ? '공유·관리' : a.guest ? '👤 ' + a.guest.nickname : '운영자 로그인');
+    if (a.canEdit && a.configured && state.gUnread) btn.innerHTML = '공유·관리 <span class="err-badge" title="게스트 기기에서 생긴 새 오류">⚠ ' + state.gUnread + '</span>';
+    // 게스트: 닉네임 아래에 "설정"을 작게 붙여 이 단추가 설정으로 들어가는 곳임을 알린다
     btn.classList.toggle('with-sub', !!(a.guest && !a.canEdit));
     if (a.guest && !a.canEdit) btn.innerHTML = '<span class="ab-name">👤 ' + escapeHtml(a.guest.nickname) + '</span><span class="ab-sub">설정</span>';
-    // 손님으로 로그인하면 스토리 탭 이름 앞에 닉네임을 붙인다 (예: "철수 스토리"). 너무 길면 줄인다.
+    // 게스트로 로그인하면 스토리 탭 이름 앞에 닉네임을 붙인다 (예: "철수 스토리"). 너무 길면 줄인다.
     var gsTab = document.querySelector('.segmented button[data-view="gstory"]');
     if (gsTab) {
       var gn = a.guest && a.guest.nickname ? String(a.guest.nickname) : '';
       gsTab.textContent = gn ? (gn.length > 8 ? gn.slice(0, 7) + '…' : gn) + ' 스토리' : '스토리';
       gsTab.title = gn ? gn + '님의 스토리' : '';
     }
-    // 손님에게는 주인이 고른 공개 범위만 보여준다 (서버에서도 같은 기준으로 자료를 줄여서 보낸다)
+    // 게스트에게는 운영자가 고른 공개 범위만 보여준다 (서버에서도 같은 기준으로 자료를 줄여서 보낸다)
     var sh = guestShare();
     document.body.classList.toggle('hide-marks', !!(sh && !sh.marks));
     SHARE_TABS.concat(['feed', 'mine']).forEach(function (v) {
       var b = document.querySelector('.segmented [data-view="' + v + '"]');
       if (b) b.hidden = !!(sh && !shareTab(sh, v)) || !prefTabOn(v);
     });
-    // 손님 화면은 탭 수가 다르다 → 칸 수를 맞춘다
+    // 게스트 화면은 탭 수가 다르다 → 칸 수를 맞춘다
     var nVis = Array.prototype.filter.call(document.querySelectorAll('.segmented button'), function (b) { return !b.hidden; }).length;
     document.querySelector('.segmented').style.gridTemplateColumns = 'repeat(' + Math.max(1, nVis) + ', minmax(0, 1fr))';
     // 골프를 공개하지 않으면 지도의 "골프장" 단추도 숨긴다
@@ -7656,10 +8045,10 @@
     if (golfChip && sh && !shareTab(sh, 'golf')) golfChip.hidden = true;
   }
   // 탭 순서와 같은 순서. 골프·날씨는 나중에 생긴 탭이라 값이 없으면 둘러보기·지도 설정을 따른다(서버와 같은 규칙).
-  // 손님에게 공개할 수 있는 탭. 내 여행 기록(feed)·내 장소(mine)는 주인만 본다.
-  var SHARE_TABS = ['map', 'mtn', 'golf', 'weather', 'browse', 'gstory'];
+  // 게스트에게 공개할 수 있는 탭. 내 여행 기록(feed)·내 장소(mine)는 운영자만 본다.
+  var SHARE_TABS = ['map', 'mtn', 'golf', 'weather', 'browse', 'food', 'gstory'];
   function shareTab(sh, v) {
-    if (!sh) return true; // 주인
+    if (!sh) return true; // 운영자
     if (v === 'feed' || v === 'mine') return false;
     var t = sh.tabs || {};
     if (typeof t[v] === 'boolean') return t[v];
@@ -7675,9 +8064,9 @@
     return '';
   }
 
-  // ---------- 공개 범위 설정 (주인만) ----------
+  // ---------- 공개 범위 설정 (운영자만) ----------
   function openShareSettings() {
-    var cur = state.auth.share || { tabs: { map: true, golf: true, weather: true, browse: true, gstory: true }, marks: true, storyMemo: true, storyLocation: true, hiddenStories: [], guestApproval: false };
+    var cur = state.auth.share || { tabs: { map: true, golf: true, weather: true, browse: true, food: true, gstory: true }, marks: true, storyMemo: true, storyLocation: true, hiddenStories: [], guestApproval: false };
     function box(key, label, help, on) {
       return '<label class="share-opt"><input type="checkbox" data-opt="' + key + '"' + (on ? ' checked' : '') + '><span><b>' + label + '</b>' + (help ? '<small>' + help + '</small>' : '') + '</span></label>';
     }
@@ -7687,16 +8076,17 @@
           '<div class="page-head"><h2>공개 범위 설정</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div>' +
           '<div class="page-body">' +
             '<section class="page-sec">' +
-              '<p class="copy-hint" style="font-size:0.9rem;">공유 링크를 받은 사람(손님)에게 보여줄 내용을 골라 주세요. 체크를 끈 것은 손님 화면에서 사라지고, 서버도 손님에게 그 자료를 보내지 않아요. 나(주인)의 화면은 그대로예요.</p>' +
+              '<p class="copy-hint" style="font-size:0.9rem;">공유 링크를 받은 사람(게스트)에게 보여줄 내용을 골라 주세요. 체크를 끈 것은 게스트 화면에서 사라지고, 서버도 게스트에게 그 자료를 보내지 않아요. 나(운영자)의 화면은 그대로예요.</p>' +
               '<h3>보여줄 화면</h3>' +
               box('tabs.map', '지도', '지도 탭', shareTab(cur, 'map')) +
               box('tabs.golf', '골프', '전국 골프장 목록과 코스 정보 (지도의 "골프장" 단추 포함)', shareTab(cur, 'golf')) +
               box('tabs.weather', '날씨', '날씨 탭 (보는 사람의 위치 기준)', shareTab(cur, 'weather')) +
               box('tabs.browse', '둘러보기', '명소·맛집·문화유산 등 공공 자료 목록', shareTab(cur, 'browse')) +
-              box('tabs.gstory', '스토리', '손님도 글과 사진(글 하나에 10장까지)을 올릴 수 있는 탭', shareTab(cur, 'gstory')) +
-              '<p class="copy-hint">내 여행 기록·내 장소는 나만 보는 화면이라 손님에게는 보이지 않아요.</p>' +
+              box('tabs.food', '맛집', '추천 맛집(유튜버 소개·운영자·게스트 추천)과 내 주변 맛집. 게스트도 맛집을 등록할 수 있어요(운영자 확인 후 공개)', shareTab(cur, 'food')) +
+              box('tabs.gstory', '스토리', '게스트도 글과 사진(글 하나에 10장까지)을 올릴 수 있는 탭', shareTab(cur, 'gstory')) +
+              '<p class="copy-hint">내 여행 기록·내 장소는 나만 보는 화면이라 게스트에게는 보이지 않아요.</p>' +
               '<h3>스토리 탭</h3>' +
-              box('guestApproval', '손님 글은 내가 확인한 뒤 공개', '켜면 손님이 쓴 글이 "확인 대기"로 들어와요. 손님 글은 쓴 손님 본인과 나만 볼 수 있고, 다른 손님에게는 보이지 않아요(나는 언제든 숨기거나 지울 수 있어요).', !!cur.guestApproval) +
+              box('guestApproval', '게스트 글은 내가 확인한 뒤 공개', '켜면 게스트가 쓴 글이 "확인 대기"로 들어와요. 게스트 글은 쓴 게스트 본인과 나만 볼 수 있고, 다른 게스트에게는 보이지 않아요(나는 언제든 숨기거나 지울 수 있어요).', !!cur.guestApproval) +
               '<h3>장소 정보</h3>' +
               box('marks', '내 기록', '장소마다 남긴 다녀옴 표시·별점·한 줄 평', cur.marks) +
             '</section>' +
@@ -7717,7 +8107,7 @@
     save.addEventListener('click', function () {
       var opt = function (k) { var c = sheet.querySelector('[data-opt="' + k + '"]'); return !!(c && c.checked); };
       var next = {
-        tabs: { feed: false, map: opt('tabs.map'), golf: opt('tabs.golf'), weather: opt('tabs.weather'), browse: opt('tabs.browse'), gstory: opt('tabs.gstory'), mine: false },
+        tabs: { feed: false, map: opt('tabs.map'), golf: opt('tabs.golf'), weather: opt('tabs.weather'), browse: opt('tabs.browse'), food: opt('tabs.food'), gstory: opt('tabs.gstory'), mine: false },
         storyMemo: cur.storyMemo !== false, storyLocation: cur.storyLocation !== false, marks: opt('marks'),
         hiddenStories: cur.hiddenStories || [], guestApproval: opt('guestApproval'),
       };
@@ -7726,9 +8116,9 @@
       save.disabled = true; msg.textContent = '저장하는 중...';
       authPost({ action: 'share', share: next }).then(function (r) {
         save.disabled = false;
-        if (!r.ok) { msg.className = 'status-line err'; msg.textContent = '저장하지 못했어요. 주인 로그인이 되어 있는지 확인해 주세요.'; return; }
+        if (!r.ok) { msg.className = 'status-line err'; msg.textContent = '저장하지 못했어요. 운영자 로그인이 되어 있는지 확인해 주세요.'; return; }
         state.auth.share = r.share;
-        msg.textContent = '저장했어요. 손님이 링크를 다시 열면 바뀐 범위로 보여요.';
+        msg.textContent = '저장했어요. 게스트가 링크를 다시 열면 바뀐 범위로 보여요.';
       }).catch(function () { save.disabled = false; msg.className = 'status-line err'; msg.textContent = '연결하지 못했어요. 잠시 뒤 다시 해주세요.'; });
     });
   }
@@ -7762,7 +8152,7 @@
     requestAnimationFrame(function () { t.classList.add('on'); });
     setTimeout(function () { t.classList.remove('on'); setTimeout(function () { t.remove(); }, 400); }, ms || 3800);
   }
-  // ----- 손님 로그인: 공유 링크로 처음 들어오면 닉네임·비밀번호를 만들거나 넣는다.
+  // ----- 게스트 로그인: 공유 링크로 처음 들어오면 닉네임·비밀번호를 만들거나 넣는다.
   //       로그인하면 이 기기에 "로그인 열쇠"(쿠키)가 저장되어 다음부터 자동 로그인 (비밀번호 자체는 기기에 저장하지 않는다)
   function showGuestGate() {
     $('fab-write').hidden = true;
@@ -7775,15 +8165,15 @@
     main.insertAdjacentHTML('afterbegin', '<div class="lock-card guest-gate">' +
       '<h2>여행 스토리에 오신 걸 환영해요</h2>' +
       '<p>처음 한 번만 <b>닉네임</b>과 <b>비밀번호</b>를 정해 주세요. 이 기기에서는 다음부터 자동으로 로그인돼요.</p>' +
-      (state.auth.blocked ? '<div class="status-line err">이 계정은 지금 쓸 수 없어요. 주인에게 문의해 주세요.</div>' : '') +
+      (state.auth.blocked ? '<div class="status-line err">이 계정은 지금 쓸 수 없어요. 운영자에게 문의해 주세요.</div>' : '') +
       '<div class="gate-tabs"><button type="button" data-gm="join">처음 왔어요</button><button type="button" data-gm="login">전에 만들었어요</button></div>' +
       '<div class="field"><label for="gg-nick">닉네임</label><input id="gg-nick" maxlength="20" autocomplete="username" placeholder="2~20자 (스토리 탭 이름에 쓰여요)"></div>' +
       '<div class="field"><label for="gg-pw">비밀번호</label><input id="gg-pw" type="password" maxlength="100" autocomplete="current-password" placeholder="4자 이상"></div>' +
       '<div class="field" data-gg-pw2><label for="gg-pw2">비밀번호 한 번 더</label><input id="gg-pw2" type="password" maxlength="100" autocomplete="new-password"></div>' +
       '<div class="status-line err" data-ggmsg hidden></div>' +
       '<button type="button" class="primary-btn" data-gggo></button>' +
-      '<p class="copy-hint">비밀번호는 암호화되어 저장돼 주인도 볼 수 없어요. 잊어버리면 주인에게 새 비밀번호를 받아 주세요.<br>다른 곳에서 쓰는 비밀번호는 쓰지 않는 게 좋아요.</p>' +
-      '<button type="button" class="text-btn" data-ggowner>주인이신가요? 주인 로그인</button>' +
+      '<p class="copy-hint">비밀번호는 암호화되어 저장돼 운영자도 볼 수 없어요. 잊어버리면 운영자에게 새 비밀번호를 받아 주세요.<br>다른 곳에서 쓰는 비밀번호는 쓰지 않는 게 좋아요.</p>' +
+      '<button type="button" class="text-btn" data-ggowner>운영자이신가요? 운영자 로그인</button>' +
     '</div>');
     var nick = main.querySelector('#gg-nick'), pw = main.querySelector('#gg-pw'), pw2 = main.querySelector('#gg-pw2');
     var msg = main.querySelector('[data-ggmsg]'), go = main.querySelector('[data-gggo]');
@@ -7814,8 +8204,8 @@
         fail(e === 'nickname taken' ? '이미 쓰고 있는 닉네임이에요. 전에 만들었다면 "전에 만들었어요"를 눌러 로그인하세요.'
           : e === 'wrong' ? '닉네임이나 비밀번호가 맞지 않아요.'
           : e === 'locked' ? '비밀번호를 여러 번 틀려서 10분 동안 잠겼어요. 잠시 뒤 다시 해 주세요.'
-          : e === 'blocked' ? '이 계정은 지금 쓸 수 없어요. 주인에게 문의해 주세요.'
-          : e === 'link required' ? '공유 링크가 바뀌었어요. 주인에게 새 링크를 받아 주세요.'
+          : e === 'blocked' ? '이 계정은 지금 쓸 수 없어요. 운영자에게 문의해 주세요.'
+          : e === 'link required' ? '공유 링크가 바뀌었어요. 운영자에게 새 링크를 받아 주세요.'
           : '들어가지 못했어요. 잠시 뒤 다시 해 주세요.');
       }).catch(function () { fail('연결하지 못했어요. 잠시 뒤 다시 해 주세요.'); });
     }
@@ -7828,28 +8218,36 @@
       loginInto(box, function () { location.href = location.pathname; });
     });
   }
-  // ----- 손님 관리 (주인만): 목록·이름 붙이기·사용 기록·오류·차단·비밀번호 새로 정하기·삭제
+  // ----- 게스트 관리 (운영자만): 목록·이름 붙이기·사용 기록·오류·차단·비밀번호 새로 정하기·삭제
   function checkGuestErrors() {
+    fetch('/api/picks?count=1', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (!j || !j.ok) return;
+      var before = state.pickPending || 0;
+      state.pickPending = j.pending || 0;
+      paintAdminBadge();
+      if (state.pickPending && state.pickPending > before) showToast('🍜 게스트가 등록한 맛집 ' + state.pickPending + '곳이 확인을 기다려요 — 맛집 탭 → ⏳ 확인 대기', 6000);
+    }).catch(function () {});
     fetch('/api/glog?count=1', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
       if (!j || !j.ok) return;
       var before = state.gUnread || 0;
       state.gUnread = j.unread || 0;
       paintAdminBadge();
-      if (state.gUnread && state.gUnread !== before) showToast('⚠ 손님 기기에서 새 오류 ' + state.gUnread + '건 — 공유·관리 → 손님 관리에서 볼 수 있어요', 6000);
+      if (state.gUnread && state.gUnread !== before) showToast('⚠ 게스트 기기에서 새 오류 ' + state.gUnread + '건 — 공유·관리 → 게스트 관리에서 볼 수 있어요', 6000);
     }).catch(function () {});
   }
-  // 주인 화면을 켜 두면 5분마다 새 오류가 있는지 본다
+  // 운영자 화면을 켜 두면 5분마다 새 오류가 있는지 본다
   setInterval(function () { if (state.auth && state.auth.canEdit && state.auth.configured && document.visibilityState === 'visible') checkGuestErrors(); }, 5 * 60 * 1000);
   function paintAdminBadge() {
     var btn = $('admin-btn');
     if (!btn || !state.auth || !state.auth.canEdit || !state.auth.configured) return;
-    btn.innerHTML = '공유·관리' + (state.gUnread ? ' <span class="err-badge" title="손님 기기에서 생긴 새 오류">⚠ ' + state.gUnread + '</span>' : '');
+    btn.innerHTML = '공유·관리' + (state.gUnread ? ' <span class="err-badge" title="게스트 기기에서 생긴 새 오류">⚠ ' + state.gUnread + '</span>' : '') +
+      (state.pickPending ? ' <span class="err-badge pk-badge" title="확인을 기다리는 게스트 맛집">🍜 ' + state.pickPending + '</span>' : '');
   }
   function openGuestAdmin() {
     var sheet = el('<div class="sheet-backdrop full"><div class="sheet page" role="dialog" aria-modal="true">' +
-      '<div class="page-head"><h2>손님 관리</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div>' +
+      '<div class="page-head"><h2>게스트 관리</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div>' +
       '<div class="page-body"><section class="page-sec">' +
-        '<p class="copy-hint" style="font-size:0.9rem;">공유 링크로 들어와 닉네임을 만든 손님 목록이에요. <b>✏️ 이름</b>으로 내가 아는 이름을 붙여 둘 수 있어요(손님에게는 보이지 않아요). 손님이 쓴 기능과 손님 기기에서 생긴 오류도 여기서 볼 수 있어요. 비밀번호는 암호화되어 저장돼 나도 볼 수 없고, 잊은 손님에게는 새 비밀번호를 정해 줄 수 있어요.</p>' +
+        '<p class="copy-hint" style="font-size:0.9rem;">공유 링크로 들어와 닉네임을 만든 게스트 목록이에요. <b>✏️ 이름</b>으로 내가 아는 이름을 붙여 둘 수 있어요(게스트에게는 보이지 않아요). 게스트가 쓴 기능과 게스트 기기에서 생긴 오류도 여기서 볼 수 있어요. 비밀번호는 암호화되어 저장돼 나도 볼 수 없고, 잊은 게스트에게는 새 비밀번호를 정해 줄 수 있어요.</p>' +
         '<div class="status-line" data-gamsg hidden></div>' +
         '<div data-gasum></div>' +
         '<div class="guest-list" data-galist><div class="status-line">불러오는 중...</div></div>' +
@@ -7890,7 +8288,7 @@
           return '<div class="gr-err' + (i < unread ? ' new' : '') + '"><div class="ge-msg">' + escapeHtml(x.msg) + (x.n > 1 ? ' <span class="gr-dev">(' + x.n + '번)</span>' : '') + '</div>' +
             '<small>' + when(x.at) + (x.view ? ' · ' + escapeHtml(x.view) + ' 화면' : '') + (x.dev ? ' · ' + escapeHtml(x.dev) : '') + '</small>' +
             (x.where ? '<small>' + escapeHtml(x.where) + '</small>' : '') + '</div>';
-        }).join('') + '<button type="button" class="link-btn" style="margin:0;align-self:flex-start" data-gaclear>이 손님의 오류 기록 지우기</button></div>';
+        }).join('') + '<button type="button" class="link-btn" style="margin:0;align-self:flex-start" data-gaclear>이 게스트의 오류 기록 지우기</button></div>';
     }
     function load() {
       Promise.all([
@@ -7902,10 +8300,10 @@
         if (!r.ok) { list.innerHTML = '<div class="status-line err">목록을 불러오지 못했어요.</div>'; return; }
         var logs = {}; ((gl && gl.logs) || []).forEach(function (x) { logs[x.id] = x; });
         var newErr = (gl && gl.unread) || 0;
-        sum.innerHTML = newErr ? '<div class="ga-summary">⚠ 손님 기기에서 <b>새 오류 ' + newErr + '건</b>이 생겼어요. 빨간 단추를 눌러 내용을 보세요. 원인을 모르겠으면 그 화면을 캡처해 Claude 에게 보내 주면 돼요.</div>' : '';
+        sum.innerHTML = newErr ? '<div class="ga-summary">⚠ 게스트 기기에서 <b>새 오류 ' + newErr + '건</b>이 생겼어요. 빨간 단추를 눌러 내용을 보세요. 원인을 모르겠으면 그 화면을 캡처해 Claude 에게 보내 주면 돼요.</div>' : '';
         var rows = r.guests.slice();
         if (logs.anon) rows.push({ id: 'anon', nickname: '로그인 전 방문자', realName: '', anon: true, lastSeen: logs.anon.last, status: 'active' });
-        if (!rows.length) { list.innerHTML = '<div class="copy-hint">아직 가입한 손님이 없어요.</div>'; return; }
+        if (!rows.length) { list.innerHTML = '<div class="copy-hint">아직 가입한 게스트가 없어요.</div>'; return; }
         var count = {};
         posts.forEach(function (g) { if (g.guestId) count[g.guestId] = (count[g.guestId] || 0) + 1; });
         list.innerHTML = rows.map(function (g) {
@@ -7940,13 +8338,13 @@
             var row = b.closest('[data-gid]'), id = row.getAttribute('data-gid'), act = b.getAttribute('data-ga');
             var name = row.getAttribute('data-real') || row.getAttribute('data-nick');
             if (act === 'name') {
-              var nn = window.prompt('"' + row.getAttribute('data-nick') + '" 손님에게 붙일 이름 (예: 홍길동, 회사 동료 김과장). 나만 보여요. 지우려면 비워 두세요.', row.getAttribute('data-real') || '');
+              var nn = window.prompt('"' + row.getAttribute('data-nick') + '" 게스트에게 붙일 이름 (예: 홍길동, 회사 동료 김과장). 나만 보여요. 지우려면 비워 두세요.', row.getAttribute('data-real') || '');
               if (nn == null) return;
               authPost({ action: 'gname', id: id, name: nn }).then(function (r2) { if (r2.ok) { say(nn.trim() ? '이름을 "' + nn.trim() + '"(으)로 붙였어요.' : '붙인 이름을 지웠어요.'); load(); } else say('저장하지 못했어요.', true); });
               return;
             }
             if (act === 'reset') {
-              var np = window.prompt(name + '님의 새 비밀번호 (4자 이상). 정한 비밀번호를 손님에게 알려 주세요.');
+              var np = window.prompt(name + '님의 새 비밀번호 (4자 이상). 정한 비밀번호를 게스트에게 알려 주세요.');
               if (np == null) return;
               if (np.length < 4) return say('비밀번호는 4자 이상이어야 해요.', true);
               authPost({ action: 'greset', id: id, password: np }).then(function (r2) { if (r2.ok) { say(name + '님의 비밀번호를 바꿨어요. 모든 기기에서 로그아웃되었고, 새 비밀번호로 다시 로그인하면 돼요.'); load(); } else say('바꾸지 못했어요.', true); });
@@ -7970,14 +8368,14 @@
     load();
   }
   function showLock() {
-    document.querySelector('main').innerHTML = '<div class="lock-card"><h2>공유 링크가 필요해요</h2><p>이 페이지는 주인이 보내 준 링크로 들어와야 볼 수 있어요. 받은 링크를 다시 눌러 주세요.<br>주인이라면 아래에 편집 암호를 넣어 로그인하세요.</p></div>';
+    document.querySelector('main').innerHTML = '<div class="lock-card"><h2>공유 링크가 필요해요</h2><p>이 페이지는 운영자가 보내 준 링크로 들어와야 볼 수 있어요. 받은 링크를 다시 눌러 주세요.<br>운영자라면 아래에 편집 암호를 넣어 로그인하세요.</p></div>';
     $('fab-write').hidden = true;
     $('admin-btn').hidden = true;
     loginInto(document.querySelector('.lock-card'), function () { location.href = location.pathname; });
   }
   function openAdmin() {
     var a = state.auth;
-    var sheet = el('<div class="sheet-backdrop"><div class="sheet"><div class="sheet-head"><h2>' + (a.guest ? '내 계정' : a.configured && !a.canEdit ? '주인 로그인' : '공유 · 관리') + '</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div><div data-abody></div></div></div>');
+    var sheet = el('<div class="sheet-backdrop"><div class="sheet"><div class="sheet-head"><h2>' + (a.guest ? '내 계정' : a.configured && !a.canEdit ? '운영자 로그인' : '공유 · 관리') + '</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div><div data-abody></div></div></div>');
     $('sheet-root').appendChild(sheet);
     sheet.querySelector('[data-close]').addEventListener('click', function () { sheet.remove(); });
     sheet.addEventListener('click', function (e) { if (e.target === sheet) sheet.remove(); });
@@ -7985,14 +8383,14 @@
 
     function paintOwner() {
       body.innerHTML =
-        '<div class="admin-note"><b>손님 링크</b> — 이 링크를 받은 사람은 공개한 화면을 볼 수 있고, "스토리" 탭에 글을 쓸 수 있어요(공개 범위에서 켰을 때). 손님이 쓴 글은 그 손님과 나만 볼 수 있어요. 내 여행 기록·내 장소는 보이지 않아요.</div>' +
+        '<div class="admin-note"><b>게스트 링크</b> — 이 링크를 받은 사람은 공개한 화면을 볼 수 있고, "스토리" 탭에 글을 쓸 수 있어요(공개 범위에서 켰을 때). 게스트가 쓴 글은 그 게스트와 나만 볼 수 있어요. 내 여행 기록·내 장소는 보이지 않아요.</div>' +
         '<div class="field"><div class="share-row"><input readonly data-link aria-label="공유 링크"><button type="button" class="link-btn" style="margin:0" data-copy>링크 복사</button></div></div>' +
         '<div class="status-line" data-amsg hidden></div>' +
         '<div class="admin-note"><b>공개 범위</b> — 링크를 받은 사람에게 무엇을 보여줄지 고를 수 있어요.</div>' +
         '<button type="button" class="primary-btn" style="margin-bottom:8px;" data-sharecfg>공개 범위 설정</button>' +
-        '<button type="button" class="primary-btn ghost" style="margin-bottom:8px;" data-guestadm>👥 손님 관리 (이름·사용 기록·오류·차단)' + (state.gUnread ? ' <span class="err-badge">⚠ 새 오류 ' + state.gUnread + '</span>' : '') + '</button>' +
+        '<button type="button" class="primary-btn ghost" style="margin-bottom:8px;" data-guestadm>👥 게스트 관리 (이름·사용 기록·오류·차단)' + (state.gUnread ? ' <span class="err-badge">⚠ 새 오류 ' + state.gUnread + '</span>' : '') + '</button>' +
         '<button type="button" class="primary-btn ghost" style="margin-bottom:14px;" data-myprefs>⚙️ 내 메뉴 설정 (이 기기)</button>' +
-        '<div class="admin-note"><b>아이패드·휴대폰에서 고치려면</b> — 그 기기에서 이 사이트를 열고 <b>주인 로그인</b>에 편집 암호를 넣으면 돼요. 한 번 로그인하면 그 기기에서는 계속 고칠 수 있어요.</div>' +
+        '<div class="admin-note"><b>아이패드·휴대폰에서 고치려면</b> — 그 기기에서 이 사이트를 열고 <b>운영자 로그인</b>에 편집 암호를 넣으면 돼요. 한 번 로그인하면 그 기기에서는 계속 고칠 수 있어요.</div>' +
         '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
           '<button type="button" class="link-btn" style="margin:0" data-newlink>새 링크 만들기</button>' +
           '<button type="button" class="link-btn" style="margin:0" data-logout>이 기기에서 로그아웃</button>' +
@@ -8053,16 +8451,16 @@
       body.innerHTML = '<div class="admin-note"><b>' + escapeHtml(a.guest.nickname) + '</b>님으로 로그인되어 있어요. 이 기기에서는 다음에도 자동으로 로그인돼요.</div>' +
         '<button type="button" class="primary-btn" style="margin-bottom:8px" data-gprefs>⚙️ 내 메뉴 설정 (관심 분야만 보기)</button>' +
         '<button type="button" class="primary-btn ghost" data-glogout>이 기기에서 로그아웃</button>' +
-        '<div class="admin-note" style="margin-top:14px;">비밀번호를 잊었으면 주인에게 새 비밀번호를 받아 주세요.</div>' +
-        '<div class="admin-note" style="margin-top:8px;font-size:0.85rem;">앱을 고치는 데 쓰려고, 어떤 기능을 몇 번 썼는지와 기기 종류, 화면에서 생긴 오류가 주인에게 전달돼요. 내 위치·글 내용·검색어는 보내지 않아요.</div>' +
-        '<details class="owner-more"><summary>주인이신가요?</summary><div data-ownerlogin></div></details>';
+        '<div class="admin-note" style="margin-top:14px;">비밀번호를 잊었으면 운영자에게 새 비밀번호를 받아 주세요.</div>' +
+        '<div class="admin-note" style="margin-top:8px;font-size:0.85rem;">앱을 고치는 데 쓰려고, 어떤 기능을 몇 번 썼는지와 기기 종류, 화면에서 생긴 오류가 운영자에게 전달돼요. 내 위치·글 내용·검색어는 보내지 않아요.</div>' +
+        '<details class="owner-more"><summary>운영자이신가요?</summary><div data-ownerlogin></div></details>';
       body.querySelector('[data-gprefs]').addEventListener('click', function () { sheet.remove(); openPrefs(); });
       body.querySelector('[data-glogout]').addEventListener('click', function () {
         authPost({ action: 'glogout' }).then(function () { try { sessionStorage.removeItem('ts.autoShown'); } catch (e) {} location.href = location.pathname; });
       });
       loginInto(body.querySelector('[data-ownerlogin]'), function () { location.reload(); });
     } else {
-      body.innerHTML = '<div class="admin-note">주인만 여행 기록을 올리고 고칠 수 있어요. 편집 암호를 넣어 로그인하세요.</div>';
+      body.innerHTML = '<div class="admin-note">운영자만 여행 기록을 올리고 고칠 수 있어요. 편집 암호를 넣어 로그인하세요.</div>';
       loginInto(body, function () { location.reload(); });
     }
   }
@@ -8082,7 +8480,7 @@
     loadPrefs();
     applyAuth();
     authDone();
-    setTimeout(function () { tele.flush(false); }, 4000); // 손님: 방문 1회 기록 (주인은 보내지 않음)
+    setTimeout(function () { tele.flush(false); }, 4000); // 게스트: 방문 1회 기록 (운영자는 보내지 않음)
     if (state.auth.canEdit && state.auth.configured) checkGuestErrors();
     if (state.auth.needGuest) { showGuestGate(); return; }
     if (!state.auth.canView) { showLock(); return; }
@@ -8095,11 +8493,11 @@
       else if (!shown) showToast('🔐 저장된 로그인 정보로 자동 로그인했어요 · ' + state.auth.guest.nickname + '님');
     }
     var fv = firstVisibleView();
-    if (fv === '') { document.querySelector('main').innerHTML = '<div class="lock-card"><h2>공개된 내용이 없어요</h2><p>주인이 아직 공개할 내용을 고르지 않았어요.</p></div>'; return; }
+    if (fv === '') { document.querySelector('main').innerHTML = '<div class="lock-card"><h2>공개된 내용이 없어요</h2><p>운영자가 아직 공개할 내용을 고르지 않았어요.</p></div>'; return; }
     switchView(fv || 'map');
     loadStories();
     locate(); // 앱을 열자마자 내 위치 확인
-    // 손님이 처음 들어오면 관심 분야를 한 번 고르게 한다
+    // 게스트가 처음 들어오면 관심 분야를 한 번 고르게 한다
     if (state.auth.guest && !state.prefsSet) setTimeout(function () { openPrefs(true); }, 600);
   })();
 

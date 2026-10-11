@@ -48,6 +48,7 @@ import fn_mtninfo, { config as cfg_mtninfo } from '../netlify/functions/mtninfo.
 import fn_myplaces, { config as cfg_myplaces } from '../netlify/functions/myplaces.mts';
 import fn_nearby, { config as cfg_nearby } from '../netlify/functions/nearby.mts';
 import fn_photos, { config as cfg_photos } from '../netlify/functions/photos.mts';
+import fn_picks, { config as cfg_picks } from '../netlify/functions/picks.mts';
 import fn_placedetail, { config as cfg_placedetail } from '../netlify/functions/placedetail.mts';
 import fn_placesearch, { config as cfg_placesearch } from '../netlify/functions/placesearch.mts';
 import fn_restaurants, { config as cfg_restaurants } from '../netlify/functions/restaurants.mts';
@@ -83,6 +84,7 @@ for (const [fn, cfg] of [
   [fn_myplaces, cfg_myplaces],
   [fn_nearby, cfg_nearby],
   [fn_photos, cfg_photos],
+  [fn_picks, cfg_picks],
   [fn_placedetail, cfg_placedetail],
   [fn_placesearch, cfg_placesearch],
   [fn_restaurants, cfg_restaurants],

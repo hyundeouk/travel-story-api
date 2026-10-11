@@ -21,7 +21,8 @@ export default async (req: Request, context: Context) => {
   if (req.method === 'OPTIONS') return corsPreflightResponse();
   const a = await accessOf(req);
   if (!a.canView) return jsonResponse({ error: a.needGuest ? 'guest-login' : 'link required' }, { status: 401 });
-  if (!a.canEdit) {
+  // 스토리를 닫아 두어도 로그인한 손님은 추천 맛집 사진을 올리고 볼 수 있어야 한다
+  if (!a.canEdit && !a.guest) {
     const share = await readShare(req.method !== 'GET');
     if (!share.tabs.gstory) return jsonResponse({ error: 'not found' }, { status: 404 });
   }

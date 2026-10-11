@@ -1,0 +1,436 @@
+{
+ "note": "먹방 유튜버가 방문·소개한 가게 목록(사실 정보와 원래 영상·채널·기사 주소만). 운영자가 '유튜버 맛집 기본 목록 넣기'로 카카오 장소를 확인한 뒤 등록한다. 성시경 영상 주소와 쯔양 lbueoat6MJk 는 YouTube oEmbed 로 채널·제목 확인(2026-10-11). 쯔양·히밥은 대부분 개별 영상을 확인하지 못해 채널 주소 + 출처 기사.",
+ "items": [
+  {
+   "seed": "sk-01",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "대성집",
+   "q": "대성집 도가니탕",
+   "hint": "종로구",
+   "menu": "도가니탕",
+   "video": "https://youtu.be/wu1fOmsPEr8"
+  },
+  {
+   "seed": "sk-02",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "어머니대성집",
+   "q": "어머니대성집",
+   "hint": "동대문구",
+   "menu": "해장국",
+   "video": "https://youtu.be/28pXe1a9yrA"
+  },
+  {
+   "seed": "sk-03",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "약수순대국",
+   "q": "약수순대국",
+   "hint": "중구",
+   "menu": "순대국",
+   "video": "https://youtu.be/p52CSWUXQMk"
+  },
+  {
+   "seed": "sk-04",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "화목순대국",
+   "q": "화목순대국 여의도",
+   "hint": "영등포구",
+   "menu": "순대국",
+   "video": "https://youtu.be/DpGJEDKsf1o"
+  },
+  {
+   "seed": "sk-05",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "신미식당",
+   "q": "신미식당 감자탕",
+   "hint": "",
+   "menu": "감자탕",
+   "video": "https://youtu.be/a4IFiQUf3D4"
+  },
+  {
+   "seed": "sk-06",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "옥경이네건생선",
+   "q": "옥경이네건생선",
+   "hint": "중구",
+   "menu": "생선구이",
+   "video": "https://youtu.be/QakFqXFK2Xs"
+  },
+  {
+   "seed": "sk-07",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "영미식당",
+   "q": "영미식당 신당동",
+   "hint": "중구",
+   "menu": "백반",
+   "video": "https://youtu.be/QakFqXFK2Xs"
+  },
+  {
+   "seed": "sk-08",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "경원식당",
+   "q": "경원식당 의정부",
+   "hint": "의정부",
+   "menu": "부대찌개",
+   "video": "https://youtu.be/s1ToTcCXgy0"
+  },
+  {
+   "seed": "sk-09",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "부영각",
+   "q": "부영각",
+   "hint": "",
+   "menu": "중식 (부추 복어살)",
+   "video": "https://youtu.be/iPVLZhuog-g"
+  },
+  {
+   "seed": "sk-10",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "소문난성수감자탕",
+   "q": "소문난성수감자탕",
+   "hint": "성동구",
+   "menu": "감자탕",
+   "video": "https://youtu.be/MAIrp4WYAx4"
+  },
+  {
+   "seed": "sk-11",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "육개옥",
+   "q": "육개옥",
+   "hint": "",
+   "menu": "육개장",
+   "video": "https://youtu.be/aliPr4O2T5s"
+  },
+  {
+   "seed": "sk-12",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "우정",
+   "q": "우정 청담동",
+   "hint": "강남구",
+   "menu": "등골 · 우개장",
+   "video": "https://youtu.be/vzq1jF3sRtY"
+  },
+  {
+   "seed": "sk-13",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "버거스낵",
+   "q": "버거스낵 이태원",
+   "hint": "용산구",
+   "menu": "햄버거",
+   "video": "https://youtu.be/bkdYYIBe0PM"
+  },
+  {
+   "seed": "sk-14",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "히말라야어죽",
+   "q": "히말라야어죽",
+   "hint": "",
+   "menu": "어죽",
+   "video": "https://youtu.be/mfOg_DvzijY"
+  },
+  {
+   "seed": "sk-15",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "맛좋은순대국",
+   "q": "맛좋은순대국 자양동",
+   "hint": "광진구",
+   "menu": "순대국",
+   "video": "https://youtu.be/P6sEVRj87gQ"
+  },
+  {
+   "seed": "sk-16",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "교동짬뽕",
+   "q": "교동짬뽕 방화동",
+   "hint": "강서구",
+   "menu": "짬뽕",
+   "video": "https://youtu.be/l4bgfC2WlUY"
+  },
+  {
+   "seed": "sk-17",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "반구정나루터집",
+   "q": "반구정나루터집",
+   "hint": "파주",
+   "menu": "장어구이",
+   "video": "https://youtu.be/0TaXOZFxmn4"
+  },
+  {
+   "seed": "sk-18",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "서린낙지",
+   "q": "서린낙지",
+   "hint": "종로구",
+   "menu": "낙지볶음",
+   "video": "https://youtu.be/YfEY2fPIw8s"
+  },
+  {
+   "seed": "sk-19",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "필동면옥",
+   "q": "필동면옥",
+   "hint": "중구",
+   "menu": "평양냉면",
+   "video": "https://youtu.be/EnMwZlMLPWY"
+  },
+  {
+   "seed": "sk-20",
+   "youtuber": "성시경",
+   "show": "먹을텐데",
+   "name": "영동설렁탕",
+   "q": "영동설렁탕 신사",
+   "hint": "강남구",
+   "menu": "설렁탕",
+   "video": "https://youtu.be/fR2z8JyBb44"
+  },
+  {
+   "seed": "tz-01",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "빨간떡볶이",
+   "q": "빨간떡볶이 해운대",
+   "hint": "해운대구",
+   "menu": "떡볶이",
+   "video": "https://www.youtube.com/@tzuyang6145",
+   "src": "https://v.daum.net/v/20250807155035366"
+  },
+  {
+   "seed": "tz-02",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "다리집",
+   "q": "다리집 남천",
+   "hint": "수영구",
+   "menu": "떡볶이 · 오징어튀김",
+   "video": "https://www.youtube.com/@tzuyang6145",
+   "src": "https://v.daum.net/v/20250807155035366"
+  },
+  {
+   "seed": "tz-03",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "상국이네",
+   "q": "상국이네",
+   "hint": "해운대구",
+   "menu": "떡볶이 · 김밥",
+   "video": "https://www.youtube.com/@tzuyang6145",
+   "src": "https://v.daum.net/v/20250807155035366"
+  },
+  {
+   "seed": "tz-04",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "동방밀면",
+   "q": "동방밀면",
+   "hint": "영도구",
+   "menu": "밀면",
+   "video": "https://www.youtube.com/@tzuyang6145",
+   "src": "https://v.daum.net/v/20250807155035366"
+  },
+  {
+   "seed": "tz-05",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "불짬뽕",
+   "q": "불짬뽕 영도",
+   "hint": "영도구",
+   "menu": "불짬뽕",
+   "video": "https://www.youtube.com/@tzuyang6145",
+   "src": "https://v.daum.net/v/20250807155035366"
+  },
+  {
+   "seed": "tz-06",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "대동순대",
+   "q": "대동순대 대전",
+   "hint": "대전 중구",
+   "menu": "막창순대",
+   "video": "https://www.youtube.com/@tzuyang6145",
+   "src": "https://m.view.nate.com/travel/view/360967/"
+  },
+  {
+   "seed": "tz-07",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "일미간장게장",
+   "q": "일미간장게장",
+   "hint": "동대문구",
+   "menu": "간장게장",
+   "video": "https://www.youtube.com/@tzuyang6145",
+   "src": "https://m.view.nate.com/travel/view/360967/"
+  },
+  {
+   "seed": "tz-08",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "오근내닭갈비",
+   "q": "오근내닭갈비 이촌",
+   "hint": "용산구",
+   "menu": "닭갈비",
+   "video": "https://www.youtube.com/@tzuyang6145",
+   "src": "https://m.view.nate.com/travel/view/360967/"
+  },
+  {
+   "seed": "tz-09",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "지린성",
+   "q": "지린성 군산",
+   "hint": "군산",
+   "menu": "고추짬뽕",
+   "video": "https://www.youtube.com/@tzuyang6145",
+   "src": "https://m.view.nate.com/travel/view/360967/"
+  },
+  {
+   "seed": "tz-10",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "호랑이쌀국수",
+   "q": "호랑이쌀국수 경대본점",
+   "hint": "대구 북구",
+   "menu": "쌀국수 · 볶음밥",
+   "video": "https://youtu.be/lbueoat6MJk",
+   "src": "https://busan7.com/entry/%EC%AF%94%EC%96%91%EC%9D%B4-%EC%A7%81%EC%A0%91-%EC%B0%BE%EC%95%84%EA%B0%84-%EC%A0%84%EA%B5%AD-TOP3-%EB%A7%9B%EC%A7%91-%EB%8C%80%EA%B5%AC-%EC%84%9C%EC%9A%B8-%EA%B4%91%EC%A3%BC"
+  },
+  {
+   "seed": "tz-11",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "데일리픽스",
+   "q": "데일리픽스 논현",
+   "hint": "강남구",
+   "menu": "수제버거",
+   "video": "https://youtu.be/lbueoat6MJk",
+   "src": "https://busan7.com/entry/%EC%AF%94%EC%96%91%EC%9D%B4-%EC%A7%81%EC%A0%91-%EC%B0%BE%EC%95%84%EA%B0%84-%EC%A0%84%EA%B5%AD-TOP3-%EB%A7%9B%EC%A7%91-%EB%8C%80%EA%B5%AC-%EC%84%9C%EC%9A%B8-%EA%B4%91%EC%A3%BC"
+  },
+  {
+   "seed": "tz-12",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "옛날돈까스엄마집",
+   "q": "옛날돈까스 엄마집",
+   "hint": "수원",
+   "menu": "옛날돈까스",
+   "video": "https://www.youtube.com/@tzuyang6145",
+   "src": "https://m.cafe.daum.net/wkj57/FPSX/1875"
+  },
+  {
+   "seed": "tz-13",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "제일분식",
+   "q": "제일분식 미아",
+   "hint": "강북구",
+   "menu": "떡볶이",
+   "video": "https://www.youtube.com/@tzuyang6145",
+   "src": "https://m.cafe.daum.net/wkj57/FPSX/1875"
+  },
+  {
+   "seed": "tz-14",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "어랑추",
+   "q": "어랑추 구리",
+   "hint": "구리",
+   "menu": "고등어조림",
+   "video": "https://www.youtube.com/@tzuyang6145",
+   "src": "https://m.cafe.daum.net/wkj57/FPSX/1875"
+  },
+  {
+   "seed": "tz-15",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "피양옥",
+   "q": "피양옥 천안",
+   "hint": "천안",
+   "menu": "어복쟁반 · 평양냉면",
+   "video": "https://www.youtube.com/@tzuyang6145",
+   "src": "https://m.cafe.daum.net/wkj57/FPSX/1875"
+  },
+  {
+   "seed": "tz-16",
+   "youtuber": "쯔양",
+   "show": "",
+   "name": "은주정",
+   "q": "은주정",
+   "hint": "중구",
+   "menu": "쌈 김치찌개",
+   "video": "https://www.youtube.com/@tzuyang6145",
+   "src": "https://m.cafe.daum.net/wkj57/FPSX/1875"
+  },
+  {
+   "seed": "hb-01",
+   "youtuber": "히밥",
+   "show": "",
+   "name": "떡반집",
+   "q": "떡반집 둔산",
+   "hint": "대전 서구",
+   "menu": "떡볶이 (떡반)",
+   "video": "https://www.youtube.com/@heebab",
+   "src": "https://v.daum.net/v/98ALQDKp6z"
+  },
+  {
+   "seed": "hb-02",
+   "youtuber": "히밥",
+   "show": "",
+   "name": "호박집",
+   "q": "호박집 영등포시장",
+   "hint": "영등포구",
+   "menu": "순대국",
+   "video": "https://www.youtube.com/@heebab",
+   "src": "https://v.daum.net/v/98ALQDKp6z"
+  },
+  {
+   "seed": "hb-03",
+   "youtuber": "히밥",
+   "show": "",
+   "name": "은성횟집",
+   "q": "은성횟집 광장시장",
+   "hint": "종로구",
+   "menu": "대구 매운탕",
+   "video": "https://www.youtube.com/@heebab",
+   "src": "https://v.daum.net/v/98ALQDKp6z"
+  },
+  {
+   "seed": "hb-04",
+   "youtuber": "히밥",
+   "show": "",
+   "name": "애플하우스",
+   "q": "애플하우스 이수",
+   "hint": "동작구",
+   "menu": "즉석떡볶이 · 무침군만두",
+   "video": "https://www.youtube.com/@heebab",
+   "src": "https://v.daum.net/v/98ALQDKp6z"
+  },
+  {
+   "seed": "hb-05",
+   "youtuber": "히밥",
+   "show": "",
+   "name": "논짓물식당",
+   "q": "논짓물식당",
+   "hint": "제주",
+   "menu": "갈치조림 · 갈치구이",
+   "video": "https://www.youtube.com/@heebab",
+   "src": "https://www.thetrippick.com/news/articleView.html?idxno=3150"
+  }
+ ]
+}
