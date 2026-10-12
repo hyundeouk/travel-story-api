@@ -1268,7 +1268,16 @@
   async function api(path, opts) {
     var res;
     try { res = await fetch('/api/' + path, opts); }
-    catch (ne) { if (navigator.onLine !== false && !(opts && opts.quiet)) tele.err('서버에 연결하지 못함', '/api/' + String(path).split('?')[0]); throw ne; }
+    catch (ne) {
+      // 휴대폰 망이 잠깐 끊기거나 앱 안 브라우저가 화면을 넘길 때 생기는 실패: 읽기 요청은 한 번 더 해 본다
+      var isGet = !(opts && opts.method && opts.method !== 'GET');
+      if (isGet && !(opts && opts.__retry) && document.visibilityState !== 'hidden') {
+        await new Promise(function (r) { setTimeout(r, 900); });
+        return api(path, Object.assign({}, opts || {}, { __retry: true }));
+      }
+      if (navigator.onLine !== false && !(opts && opts.quiet)) tele.netErr('/api/' + String(path).split('?')[0]);
+      throw ne;
+    }
     if (!res.ok) {
       var e = new Error('http ' + res.status);
       e.status = res.status;
@@ -1412,22 +1421,40 @@
     });
     window.addEventListener('unhandledrejection', function (e) {
       var r = e.reason;
+      if (isNetFail(r)) return; // 연결 실패는 netErr 가 알린다
       err('처리되지 않은 오류: ' + String(r && r.message || r || '').slice(0, 200), stackOf(r));
     });
     // 화면 코드가 console.error 로 남기는 실패도 함께 받는다 (예: "[stories] load failed")
     var ce = console.error;
+    // 연결 실패는 화면을 떠나는 중·안 보이는 중이면 알리지 않고, 몇 초 안에 여러 개면 한 줄로 묶는다
+    var leaving = false, netPaths = [], netTimer = 0;
+    window.addEventListener('pagehide', function () { leaving = true; });
+    window.addEventListener('beforeunload', function () { leaving = true; });
+    function netErr(where) {
+      if (leaving || document.visibilityState === 'hidden') return;
+      if (netPaths.indexOf(where) < 0) netPaths.push(where);
+      if (netTimer) return;
+      netTimer = setTimeout(function () {
+        netTimer = 0;
+        var ps = netPaths; netPaths = [];
+        if (leaving || document.visibilityState === 'hidden' || !ps.length) return;
+        err('서버에 연결하지 못함 (네트워크 끊김 · 요청 ' + ps.length + '개, 다시 해도 실패)', ps.join(', ').slice(0, 280));
+      }, 3000);
+    }
+    function isNetFail(x) { return x && (x.name === 'TypeError' || x instanceof TypeError) && /Failed to fetch|Load failed|NetworkError|network/i.test(String(x.message || '')); }
     console.error = function () {
       try {
         var a = Array.prototype.slice.call(arguments);
         var label = typeof a[0] === 'string' ? a[0] : '';
         var x = a.find(function (v) { return v && (v.message || v.stack); });
+        if (isNetFail(x)) return ce.apply(console, arguments); // 연결 실패는 netErr 가 한 번에 알린다
         err((label ? label + ' ' : '') + (x ? x.message : a.slice(label ? 1 : 0).map(String).join(' ')).trim(), x ? stackOf(x) : 'console');
       } catch (e2) {}
       return ce.apply(console, arguments);
     };
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(true); });
     window.addEventListener('pagehide', function () { flush(true); });
-    return { use: use, err: err, flush: flush, deviceName: deviceName, VIEW_NAME: VIEW_NAME };
+    return { use: use, err: err, netErr: netErr, flush: flush, deviceName: deviceName, VIEW_NAME: VIEW_NAME };
   })();
   // 권한 확인(공유 링크 등록 포함)이 끝난 뒤에 자료를 불러오기 위한 약속.
   var authDone;
