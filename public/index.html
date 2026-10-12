@@ -468,6 +468,9 @@
   .guest-row { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--surface); }
   .guest-row.blocked { opacity: 0.7; }
   .gr-main { min-width: 0; } .gr-main small { display: block; color: var(--ink-dim); font-size: 12px; margin-top: 2px; }
+  .anon-devs { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 6px; max-height: 360px; overflow-y: auto; }
+  .anon-dev { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+  .anon-dev span { display: flex; flex-direction: column; min-width: 0; font-size: 0.88rem; } .anon-dev small { color: var(--ink-dim); font-size: 12px; }
   .gr-act { display: flex; gap: 6px; flex-wrap: wrap; } .gr-act .link-btn { margin: 0; }
   .gr-main .gr-nick { font-weight: 400; color: var(--ink-dim); font-size: 0.85em; }
   .gr-extra { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
@@ -1374,10 +1377,18 @@
       else if (/Safari/.test(ua)) br = '사파리';
       return os + (br ? ' · ' + br : '');
     }
+    // 이 브라우저의 기기 번호 (로그인 전 방문자를 기기별로 세는 데만 쓴다)
+    var didMem = '';
+    function deviceId() {
+      try { var v = localStorage.getItem('ts.did'); if (v && /^[a-z0-9]{8,32}$/.test(v)) return v; } catch (e) {}
+      if (!didMem) didMem = (Date.now().toString(36) + Math.random().toString(36).slice(2, 10)).slice(0, 16);
+      try { localStorage.setItem('ts.did', didMem); } catch (e) {}
+      return didMem;
+    }
     function device() {
       var app = false;
       try { app = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) {}
-      return { name: deviceName(), w: Math.round(window.innerWidth), h: Math.round(window.innerHeight), app: app };
+      return { id: deviceId(), name: deviceName(), w: Math.round(window.innerWidth), h: Math.round(window.innerHeight), app: app };
     }
     function owner() { return !!(state.auth && state.auth.canEdit); }
     function active() { var a = state.auth; return !!(a && a.configured && !a.canEdit && a.linkOk !== false); }
@@ -9404,6 +9415,18 @@
       if (!d.length) return '';
       return '<div class="gr-dev">📱 ' + d.map(function (x) { return escapeHtml(x.name) + ' (' + x.w + '×' + x.h + (x.app ? ', 앱으로 설치' : '') + ')'; }).join(' / ') + '</div>';
     }
+    function anonDevs(lg) {
+      var d = (lg && lg.anonDevs) || ((lg && lg.devices) || []).map(function (x, i) { return { id: 'old-' + i, name: x.name, w: x.w, h: x.h, app: x.app, first: x.at, last: x.at, visits: 0, errs: 0 }; });
+      return d.slice().sort(function (a, b) { return (b.last || 0) - (a.last || 0); });
+    }
+    function anonDevHtml(list) {
+      if (!list.length) return '';
+      return '<div class="anon-devs">' + list.map(function (d) {
+        return '<div class="anon-dev" data-did="' + escapeHtml(d.id) + '"><span>📱 <b>' + escapeHtml(d.name) + '</b> <small>(' + d.w + '×' + d.h + (d.app ? ', 앱으로 설치' : '') + ')</small><small>' +
+          (d.visits ? '방문 ' + d.visits + '번 · ' : '') + '처음 ' + when(d.first).slice(0, 10) + ' · 마지막 ' + ago(d.last) + (d.errs ? ' · 오류 ' + d.errs + '건' : '') + (/^old-/.test(d.id) ? ' · 예전 기록' : '') + '</small></span>' +
+          '<button type="button" class="link-btn" style="margin:0" data-anondel>지우기</button></div>';
+      }).join('') + '</div>';
+    }
     function errsHtml(lg) {
       var e = (lg && lg.errors) || [];
       if (!e.length) return '';
@@ -9434,19 +9457,39 @@
         list.innerHTML = rows.map(function (g) {
           var lg = logs[g.id];
           var title = g.realName ? escapeHtml(g.realName) + ' <span class="gr-nick">(' + escapeHtml(g.nickname) + ')</span>' : escapeHtml(g.nickname);
-          var info = g.anon ? '공유 링크로 들어와 아직 로그인하지 않은 기기들 · 마지막 ' + ago(lg && lg.last)
+          var adevs = g.anon ? anonDevs(lg) : [];
+          var info = g.anon ? '공유 링크로 들어와 아직 로그인하지 않은 기기 <b>' + adevs.length + '대</b> · 방문 ' + adevs.reduce(function (s, d) { return s + (d.visits || 0); }, 0) + '번 · 마지막 ' + ago(lg && lg.last)
             : '가입 ' + when(g.createdAt).slice(0, 10) + ' · 마지막 접속 ' + ago(Math.max(g.lastSeen || 0, (lg && lg.last) || 0)) + ' · 방문 ' + ((lg && lg.sessions) || 0) + '번 · 로그인 기기 ' + g.devices + '대 · 스토리 ' + (count[g.id] || 0) + '건';
           return '<div class="guest-row' + (g.status === 'blocked' ? ' blocked' : '') + '" data-gid="' + escapeHtml(g.id) + '" data-nick="' + escapeHtml(g.nickname) + '" data-real="' + escapeHtml(g.realName || '') + '">' +
             '<div class="gr-main"><b>' + title + '</b>' + (g.status === 'blocked' ? ' <span class="gs-st hidden">차단됨</span>' : '') + '<small>' + info + '</small></div>' +
-            (g.anon ? '' : '<div class="gr-act">' +
+            (g.anon ? '<div class="gr-act"><button type="button" class="link-btn danger-line" data-anonclear>모두 지우기</button></div>' : '<div class="gr-act">' +
               '<button type="button" class="link-btn" data-ga="name">✏️ 이름</button>' +
               '<button type="button" class="link-btn" data-ga="' + (g.status === 'blocked' ? 'unblock' : 'block') + '">' + (g.status === 'blocked' ? '차단 풀기' : '차단') + '</button>' +
               '<button type="button" class="link-btn" data-ga="reset">새 비밀번호</button>' +
               '<button type="button" class="link-btn danger-line" data-ga="delete">삭제</button>' +
             '</div>') +
-            '<div class="gr-extra">' + devHtml(lg) + (g.anon ? '' : usageHtml(lg && lg.usage)) + errsHtml(lg) + '</div>' +
+            '<div class="gr-extra">' + (g.anon ? anonDevHtml(adevs) : devHtml(lg) + usageHtml(lg && lg.usage)) + errsHtml(lg) + '</div>' +
           '</div>';
         }).join('');
+        function anonPost(body, okMsg) {
+          return fetch('/api/glog', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, credentials: 'same-origin', body: JSON.stringify(body) })
+            .then(function (x) { return x.json(); }).then(function (j) { if (j.ok) { state.gUnread = j.unread || 0; paintAdminBadge(); say(okMsg); load(); } else say('지우지 못했어요.', true); })
+            .catch(function () { say('연결하지 못했어요.', true); });
+        }
+        list.querySelectorAll('[data-anondel]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            if (b.getAttribute('data-sure') !== '1') { b.setAttribute('data-sure', '1'); b.textContent = '정말 지우기'; return; }
+            b.disabled = true;
+            anonPost({ action: 'anondel', did: b.closest('[data-did]').getAttribute('data-did') }, '그 기기 기록을 지웠어요.');
+          });
+        });
+        list.querySelectorAll('[data-anonclear]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            if (b.getAttribute('data-sure') !== '1') { b.setAttribute('data-sure', '1'); b.textContent = '정말 모두 지우기'; return; }
+            b.disabled = true;
+            anonPost({ action: 'anonclear' }, '로그인 전 방문자 기록을 모두 지웠어요.');
+          });
+        });
         list.querySelectorAll('[data-gaerr]').forEach(function (b) {
           b.addEventListener('click', function () { var box = b.parentNode.querySelector('[data-gaerrs]'); box.hidden = !box.hidden; });
         });

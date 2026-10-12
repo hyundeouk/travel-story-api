@@ -3271,6 +3271,13 @@ var store4 = () => getStore({ name: "glog", consistency: "strong" });
 var MAX_ERRORS = 40;
 var MAX_DEVICES = 4;
 var MAX_USAGE_KEYS = 120;
+var MAX_ANON_DEVS = 300;
+function anonList(g, skipName = "") {
+  if (!Array.isArray(g.anonDevs)) {
+    g.anonDevs = (g.devices || []).filter((d) => d.name !== skipName).map((d, i) => ({ id: "old-" + i, name: d.name, w: d.w, h: d.h, app: d.app, first: d.at, last: d.at, visits: 0, errs: 0 }));
+  }
+  return g.anonDevs;
+}
 function reply2(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
 }
@@ -3309,6 +3316,28 @@ var glog_default = async (req, _context) => {
       body = JSON.parse(await req.text());
     } catch {
       body = {};
+    }
+    if (body?.action === "anondel" || body?.action === "anonclear") {
+      if (!a.canEdit) return reply2({ error: "edit not allowed" }, 403);
+      const g2 = await store4().get("anon", { type: "json" });
+      if (g2) {
+        if (body.action === "anonclear") await store4().delete("anon");
+        else {
+          const did = String(body.did || "");
+          g2.anonDevs = anonList(g2).filter((d) => d.id !== did);
+          g2.devices = (g2.devices || []).filter((d) => g2.anonDevs.some((x) => x.name === d.name));
+          await store4().setJSON("anon", g2);
+        }
+      }
+      let unread = 0;
+      for (const k of (await store4().list({ prefix: "u-" })).blobs.map((b) => b.key).concat(["anon"])) {
+        const x = await store4().get(k, { type: "json" });
+        if (x) unread += x.unread || 0;
+      }
+      const m = await readMeta();
+      m.unread = unread;
+      await store4().setJSON("meta", m);
+      return reply2({ ok: true, unread });
     }
     if (body?.action === "seen" || body?.action === "clear") {
       if (!a.canEdit) return reply2({ error: "edit not allowed" }, 403);
@@ -3387,6 +3416,24 @@ var glog_default = async (req, _context) => {
       added++;
     }
     g.errors = g.errors.slice(0, MAX_ERRORS);
+    if (!a.guest && dv && typeof dv === "object" && devName) {
+      const list = anonList(g, devName);
+      const rawId = String(dv.id || "");
+      const id = /^[a-z0-9]{8,32}$/.test(rawId) ? rawId : "nm-" + devName.slice(0, 60);
+      let d = list.find((x) => x.id === id);
+      if (!d) {
+        d = { id, name: devName, w: 0, h: 0, app: false, first: now, last: now, visits: 0, errs: 0 };
+        list.unshift(d);
+      }
+      d.name = devName;
+      d.w = num2(dv.w, 1e4);
+      d.h = num2(dv.h, 1e4);
+      d.app = !!dv.app;
+      d.last = now;
+      if (body?.session) d.visits = (d.visits || 0) + 1;
+      d.errs = (d.errs || 0) + added;
+      g.anonDevs = list.sort((x, y) => y.last - x.last).slice(0, MAX_ANON_DEVS);
+    }
     await store4().setJSON(key, g);
     if (added) {
       const m = await readMeta();
