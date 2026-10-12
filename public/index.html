@@ -490,6 +490,8 @@
   .picks-box { border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--surface); margin-bottom: 14px; }
   .food-near { border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--surface); }
   .food-near .place-list { margin-top: 10px; }
+  .picks-box .pk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+  .picks-box .pk-q { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; margin-top: 8px; flex: 1 1 220px; max-width: 420px; } .picks-box .pk-q span { margin: 0; white-space: nowrap; } .picks-box .pk-q input { flex: 1; min-width: 0; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 0.9rem; }
   .picks-box .pk-area { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; margin-top: 8px; width: auto; } .picks-box .pk-area span { margin: 0; white-space: nowrap; } .picks-box .pk-area select { width: auto; min-width: 110px; max-width: 160px; }
   .picks-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
   .picks-head .copy-hint { margin: 0; display: inline; }
@@ -1032,7 +1034,7 @@
         <select class="area-select" data-area aria-label="지역"></select>
         <select class="area-select mine-select" data-minelist aria-label="리스트" hidden></select>
         <div class="map-search">
-          <input type="search" id="map-q" placeholder="산·휴양림·문화유산·명소 이름 검색" autocomplete="off" aria-label="지도에서 이름으로 찾기">
+          <input type="search" id="map-q" placeholder="산·캠핑장·맛집·명소·편의점 등 이름이나 주소로 검색" autocomplete="off" aria-label="지도에서 이름으로 찾기">
           <div class="map-results" id="map-results" hidden></div>
         </div>
         <button type="button" class="retry-btn" id="map-reset">전국 보기</button>
@@ -6230,14 +6232,14 @@
   function msLabel(cat) { return LAYER_LABEL[cat] || cat; }
   function renderMapResults(list, loading) {
     var box = $('map-results');
-    msResults = list.slice(0, 40);
+    msResults = list.slice(0, 60);
     if (!msResults.length && !loading) { box.innerHTML = '<div class="ms-empty">찾는 이름이 없어요. 다른 낱말로 찾아보세요.</div>'; box.hidden = false; return; }
     box.innerHTML = msResults.map(function (r, i) {
       var it = r.item;
       var where = it.address || [it.sido, it.sigungu].filter(Boolean).join(' ') || it.place || '';
-      return '<button type="button" class="ms-row" data-ms="' + i + '"><span class="ms-badge" style="--c:' + (LAYER_COLOR[r.cat] || '#666') + '">' + escapeHtml(r.cat === '문화유산' && it.kindName ? it.kindName : msLabel(r.cat)) + '</span>' +
+      return '<button type="button" class="ms-row" data-ms="' + i + '"><span class="ms-badge" style="--c:' + (r.color || LAYER_COLOR[r.cat] || '#666') + '">' + escapeHtml(r.badge || (r.cat === '문화유산' && it.kindName ? it.kindName : msLabel(r.cat))) + '</span>' +
         '<b>' + escapeHtml(it.name || '') + '</b><small>' + escapeHtml(where) + '</small></button>';
-    }).join('') + (loading ? '<div class="ms-empty">문화유산·명소를 더 찾는 중...</div>' : '');
+    }).join('') + (loading ? '<div class="ms-empty">더 찾는 중... (문화유산·관광공사·카카오 장소)</div>' : '');
     box.hidden = false;
   }
   async function runMapSearch(q) {
@@ -6265,15 +6267,66 @@
         local.push({ cat: '산', item: { name: p[0], place: (p[3] ? p[3].toLocaleString() + 'm · ' : '') + 'OpenStreetMap' }, view: peakView(p) });
       });
     }
+    // 여행 단추 쪽: 골프장 · 캠핑장 · 캠핑용품점 · 추천 맛집 · 내 장소 (이름·주소로)
+    function hit() { for (var i = 0; i < arguments.length; i++) if (arguments[i] && msNorm(arguments[i]).indexOf(nq) >= 0) return true; return false; }
+    var sh = guestShare();
+    if (!(sh && !shareTab(sh, 'golf'))) {
+      var ge = await loadItems('골프장').catch(function () { return null; });
+      if (seq !== msSeq) return;
+      if (ge && ge.status === 'ready') ge.items.filter(function (it) { return hit(it.name, it.address); }).slice(0, 15).forEach(function (it) { local.push({ cat: '골프장', item: it }); });
+    }
+    if (!(sh && !shareTab(sh, 'camp'))) {
+      var cd = await loadCamps().catch(function () { return { items: [] }; });
+      if (seq !== msSeq) return;
+      cd.items.filter(function (c) { return hit(c.n, c.a); }).slice(0, 20).forEach(function (c) { local.push({ cat: '캠핑장', item: { name: c.n, address: c.a }, view: campView(c) }); });
+      var sd = await loadShops().catch(function () { return { items: [] }; });
+      if (seq !== msSeq) return;
+      (sd.items || []).filter(function (s) { return hit(s.n, s.a); }).slice(0, 15).forEach(function (s) { local.push({ cat: '캠핑용품점', item: { name: s.n, address: s.a }, view: shopView(s) }); });
+    }
+    if (!(sh && !shareTab(sh, 'food'))) {
+      var pks = await loadPicks().catch(function () { return []; });
+      if (seq !== msSeq) return;
+      pks.filter(function (p) { return p.lat != null && hit(p.name, p.address, p.road, p.menu, p.youtuber); }).slice(0, 15).forEach(function (p) {
+        local.push({ cat: '맛집', badge: isYt(p) ? '📺 유튜버 맛집' : '⭐ 추천 맛집', color: '#b4380c', item: { name: p.name, address: p.road || p.address }, view: pickView(p) });
+      });
+    }
+    if (!sh || shareTab(sh, 'mine')) {
+      var me = await loadItems('내 장소').catch(function () { return null; });
+      if (seq !== msSeq) return;
+      if (me && me.status === 'ready') me.items.filter(function (it) { return it.lat != null && hit(it.name, it.address); }).slice(0, 15).forEach(function (it) { local.push({ cat: '내 장소', item: it }); });
+    }
     local.sort(function (a, b) { return (msNorm(a.item.name) === nq ? -1 : 0) - (msNorm(b.item.name) === nq ? -1 : 0); });
     renderMapResults(local, true);
     var more = [];
+    var kakaoP = (async function () {
+      // 생활 단추 쪽(음식점·카페·숙박·편의점·마트·주차장·주유소 등): 카카오 장소 검색, 지금 지도 가운데(또는 내 위치) 둘레 먼저
+      var P = await kakaoPlaces().catch(function () { return null; });
+      if (!P || !window.kakao || !kakao.maps.services) return [];
+      var c = null;
+      try { if (state.map && state.map.getCenter) { var cc = state.map.getCenter(); c = { lat: cc.lat(), lng: cc.lng() }; } } catch (_) {}
+      if (!c && geo.pos) c = geo.pos;
+      var opt = { size: 15 };
+      if (c) { opt.location = new kakao.maps.LatLng(c.lat, c.lng); opt.sort = kakao.maps.services.SortBy ? kakao.maps.services.SortBy.ACCURACY : undefined; }
+      var r = await kakaoSearch(q, opt).catch(function () { return []; });
+      return r.map(function (x) {
+        var s = kakaoToShop(x), cat = String(x.category_name || '').split(' > ').slice(-1)[0] || '장소';
+        var v = shopView(s); v.badge = cat; v.ph = '📍';
+        return { cat: '생활', badge: '📍 ' + cat, color: '#2a7de1', item: { name: s.n, address: s.a }, view: v };
+      });
+    })();
     try {
       var j = await api('mapsearch?q=' + encodeURIComponent(q));
       more = (j.heritage || []).map(function (it) { return { cat: '문화유산', item: it }; }).concat(j.tour || []);
     } catch (err) { console.error('[map search] failed', err); }
     if (seq !== msSeq) return;
-    renderMapResults(local.concat(more), false);
+    var life = await kakaoP.catch(function () { return []; });
+    if (seq !== msSeq) return;
+    // 이미 나온 곳(이름이 같고 200m 안)은 생활 결과에서 뺀다
+    var all = local.concat(more);
+    life = life.filter(function (x) {
+      return !all.some(function (y) { var v = y.view, it = y.item || {}; var la = v ? v.lat : Number(it.mapY || it.lat), lo = v ? v.lng : Number(it.mapX || it.lng); return msNorm(it.name) === msNorm(x.item.name) && la && Math.abs(la - x.view.lat) < 0.002 && Math.abs(lo - x.view.lng) < 0.0025; });
+    });
+    renderMapResults(all.concat(life), false);
   }
   $('map-q').addEventListener('input', function () {
     var q = this.value.trim();
@@ -6311,7 +6364,7 @@
     state.mapAuto = Date.now();
     var ll = new naver.maps.LatLng(view.lat, view.lng);
     map.setCenter(ll);
-    map.setZoom(r.cat === '숲길' || r.cat === '휴양림' || r.cat === '산' || r.cat === 'BAC+' ? 12 : 15);
+    map.setZoom(r.cat === '숲길' || r.cat === '휴양림' || r.cat === '산' || r.cat === 'BAC+' ? 12 : r.cat === '캠핑장' || r.cat === '골프장' ? 14 : 15);
     if (state.searchMarker) state.searchMarker.setMap(null);
     var o = { position: ll, map: map, title: view.title || '', zIndex: 1000 };
     var ic = pinIcon(LAYER_COLOR[r.cat] || '#e0452f', view.title, true);
@@ -8674,11 +8727,15 @@
       '<div class="chip-row picks-filter" data-pkf>' + [['', '전체'], ['yt', '📺 유튜버 맛집'], ['tour', '🏛 관광공사 추천'], ['rec', '⭐ 운영자·게스트 추천']].concat(owner ? [['pending', '⏳ 확인 대기']] : []).map(function (f) {
         return '<button type="button" class="chip' + (state.pickFilter === f[0] ? ' active' : '') + '" data-f="' + f[0] + '">' + f[1] + '</button>';
       }).join('') + '</div>' +
+      '<div class="pk-row">' +
       '<label class="filter pk-area"><span>지역</span><select data-pkarea><option value="">전국</option>' + SIDO_NAMES.map(function (r) { return '<option' + (state.pickArea === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select></label>' +
+      '<label class="filter pk-q"><span>검색</span><input type="search" data-pkq placeholder="가게 이름·지역·주소·메뉴" autocomplete="off" value="' + escapeHtml(state.pickQ || '') + '"></label></div>' +
       (owner ? '<div data-pkseed></div>' : '') +
       '<div class="place-list picks-list" data-pklist><div class="status-line">불러오는 중...</div></div></section>');
     box.querySelector('[data-pkadd]').addEventListener('click', function () { openPickForm(null); });
     box.querySelector('[data-pkarea]').addEventListener('change', function () { state.pickArea = this.value; paint(); });
+    var pkqTimer = 0;
+    box.querySelector('[data-pkq]').addEventListener('input', function () { var v = this.value; clearTimeout(pkqTimer); pkqTimer = setTimeout(function () { state.pickQ = v.trim(); paint(); }, 250); });
     box.querySelector('[data-pkf]').addEventListener('click', function (e) {
       var b = e.target.closest('[data-f]'); if (!b) return;
       state.pickFilter = b.getAttribute('data-f');
@@ -8690,8 +8747,10 @@
       var label = state.pickArea || '';
       var f = state.pickFilter;
       var here = state.nearPos || geo.pos;
+      var pq = String(state.pickQ || '').replace(/\s+/g, '').toLowerCase();
       var items = all.filter(function (p) {
         if (label && label !== '전국' && p.sido !== label) return false;
+        if (pq && [p.name, p.address, p.road, p.sido, p.menu, p.youtuber, p.show, p.cat].join(' ').replace(/\s+/g, '').toLowerCase().indexOf(pq) < 0) return false;
         if (f === 'yt') return isYt(p);
         if (f === 'rec' || f === 'mine') return !isYt(p); // 운영자·게스트가 직접 올린 곳 (유튜버 정보 없는 곳)
         if (f === 'pending') return p.status === 'pending';
@@ -8703,7 +8762,7 @@
       var nearSec = document.querySelector('#view-food .food-near');
       if (nearSec && box.closest('#view-food')) nearSec.style.display = (!f || f === 'tour') ? '' : 'none';
       var tour = f === 'tour';
-      box.querySelector('.pk-area').style.display = tour ? 'none' : '';
+      box.querySelector('.pk-row').style.display = tour ? 'none' : '';
       // 운영자 단추: 기본 목록 넣기는 '📺 유튜버 맛집'에서, 나중에 확인할 곳은 '⏳ 확인 대기'에서만
       var seedSlot = box.querySelector('[data-pkseed]');
       if (seedSlot) {
@@ -8722,7 +8781,7 @@
       }
       if (here) items.forEach(function (p) { p._d = p.lat != null ? distKm(here.lat, here.lng, p.lat, p.lng) : 9999; });
       if (here) items.sort(function (x, y) { return x._d - y._d; });
-      box.querySelector('[data-pkn]').textContent = all.length + '곳' + (label ? ' · ' + label + ' ' + items.length + '곳' : '') + (here ? ' · 가까운 순' : '') + (owner && pend ? ' · 확인 대기 ' + pend + '곳' : '');
+      box.querySelector('[data-pkn]').textContent = all.length + '곳' + (label || pq ? ' · ' + [label, state.pickQ ? '「' + state.pickQ + '」' : ''].filter(Boolean).join(' ') + ' ' + items.length + '곳' : '') + (here ? ' · 가까운 순' : '') + (owner && pend ? ' · 확인 대기 ' + pend + '곳' : '');
       var list = box.querySelector('[data-pklist]');
       if (!items.length) { list.innerHTML = '<div class="copy-hint">' + (f === 'rec' ? '아직 운영자·게스트가 직접 올린 맛집이 없어요. 「＋ 맛집 등록」으로 다녀온 맛집을 올려 보세요!' : all.length ? '조건에 맞는 맛집이 없어요.' : '아직 등록된 추천 맛집이 없어요. 다녀온 맛집을 등록해 보세요!') + '</div>'; return; }
       items = items.slice(0, 300);
