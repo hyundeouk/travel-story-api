@@ -21,11 +21,39 @@
   } catch (e) {}
 })();
 </script>
+<script>
+// 빨리 열리게: 큰 스크립트를 읽기 전에, 로그인 확인과 첫 화면에 필요한 자료를 한꺼번에 먼저 요청해 둔다(나중에 api()가 받아서 쓴다).
+// 한 번 지도 키를 받은 기기는 카카오 지도 프로그램도 미리 내려받는다.
+(function () {
+  try {
+    if (new URLSearchParams(location.search).get('k')) return; // 공유 링크로 처음 들어오면 로그인 확인이 먼저
+    var E = window.__early = {};
+    ['auth', 'mapconfig', 'stories', 'fixes', 'marks', 'customimages'].forEach(function (p) {
+      var e = E[p] = { t: Date.now() };
+      e.p = fetch('/api/' + p).then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); });
+      e.p.catch(function () {});
+    });
+    var c = JSON.parse(localStorage.getItem('ts.mapcfg') || 'null');
+    if (c && /^[0-9a-f]{20,64}$/i.test(c.kakaoKey || '')) {
+      var kk = window.__kk = { key: c.kakaoKey, state: 'loading', cbs: [] };
+      var s = document.createElement('script');
+      s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + encodeURIComponent(c.kakaoKey) + '&libraries=services&autoload=false';
+      s.async = true;
+      s.onload = function () { kk.state = 'ok'; kk.cbs.splice(0).forEach(function (f) { f(true); }); };
+      s.onerror = function () { kk.state = 'fail'; kk.cbs.splice(0).forEach(function (f) { f(false); }); };
+      document.head.appendChild(s);
+    }
+  } catch (e) {}
+})();
+</script>
 <script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <meta name="description" content="직접 쓴 여행 기록과 전국 명소·맛집·둘레길·행사, 내 장소를 지도와 함께">
+<link rel="preconnect" href="https://dapi.kakao.com">
+<link rel="dns-prefetch" href="https://t1.daumcdn.net">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700;900&family=Gaegu:wght@400;700&display=swap" rel="stylesheet">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700;900&family=Gaegu:wght@400;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700;900&family=Gaegu:wght@400;700&display=swap"></noscript>
 <style>
   /*
     레이아웃 컨셉: 상단 세그먼트 탭으로 "스토리"(여행 일기 피드, 엽서 스택 느낌)와
@@ -955,7 +983,7 @@
   .sky-veil { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(var(--bg-rgb), calc(0.12 * var(--vk, 1))) 0%, rgba(var(--bg-rgb), calc(0.34 * var(--vk, 1))) 40%, rgba(var(--bg-rgb), calc(0.5 * var(--vk, 1))) 100%); }
   html.sky-on { background: var(--bg); }
   html.sky-on body { background: transparent; }
-  html.sky-on header.top { background: rgba(var(--bg-rgb), 0.56); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+  html.sky-on header.top { background: rgba(var(--bg-rgb), 0.66); }
   @media print { #sky-bg { display: none !important; } html.sky-on, html.sky-on body { background: #fff !important; } }
 </style>
 </head>
@@ -1287,6 +1315,14 @@
     throw new Error('relay failed');
   }
   async function api(path, opts) {
+    // 문서 맨 위에서 미리 요청해 둔 자료가 있으면 그것을 한 번만 쓴다 (실패하면 아래에서 새로 요청)
+    if (!opts || (opts.quiet && Object.keys(opts).length === 1)) {
+      var E = window.__early, e = E && E[path];
+      if (e) { delete E[path]; if (Date.now() - e.t < 30000) { try { return await e.p; } catch (_) { /* 새로 요청 */ } } }
+    }
+    return apiNet(path, opts);
+  }
+  async function apiNet(path, opts) {
     var res;
     try { res = await fetch('/api/' + path, opts); }
     catch (ne) {
@@ -4566,6 +4602,7 @@
     if (state.naverPromise) return state.naverPromise;
     state.mapNote = '';
     state.naverPromise = api('mapconfig').catch(function (e) { return { _err: (e && e.message) || 'error' }; }).then(function (cfg) {
+      try { if (cfg && cfg.kakaoKey) localStorage.setItem('ts.mapcfg', JSON.stringify({ kakaoKey: cfg.kakaoKey })); else if (cfg && !cfg._err) localStorage.removeItem('ts.mapcfg'); } catch (_) {}
       if (cfg && cfg.kakaoKey) {
         return loadKakao(cfg.kakaoKey).then(function () { state.mapProvider = 'kakao'; window.naver = { maps: kakaoShim(window.kakao.maps) }; }, function (err) {
           console.error('[map] kakao load failed, falling back to naver', err);
@@ -4581,6 +4618,19 @@
     return state.naverPromise;
   }
   function loadKakao(key) {
+    var kk = window.__kk;
+    if (kk && kk.key === key && kk.state !== 'fail') {
+      // 문서 맨 위에서 이미 내려받기 시작한 카카오 지도 프로그램을 이어서 쓴다
+      return new Promise(function (resolve, reject) {
+        var t = setTimeout(function () { reject(new Error('timeout')); }, 15000);
+        function go() {
+          if (!window.kakao || !kakao.maps || !kakao.maps.load) { clearTimeout(t); return reject(new Error('load')); }
+          kakao.maps.load(function () { clearTimeout(t); resolve(); });
+        }
+        if (kk.state === 'ok') go();
+        else kk.cbs.push(function (ok) { if (ok) go(); else { clearTimeout(t); window.__kk = null; loadKakao(key).then(resolve, reject); } });
+      });
+    }
     return new Promise(function (resolve, reject) {
       var s = document.createElement('script');
       s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + encodeURIComponent(key) + '&libraries=services&autoload=false';
@@ -6494,7 +6544,7 @@
       else if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) mode = 'still';
     } catch (_) {}
     var txt = document.getElementById('sky-txt'), btn = document.getElementById('sky-btn');
-    var wx = null, root = null, cv = null, ctx = null, W = 0, H = 0, raf = 0, last = 0, T = 0, fetching = false;
+    var wx = null, root = null, cv = null, ctx = null, W = 0, H = 0, raf = 0, last = 0, T = 0, fetching = false, lastScroll = 0;
     var cur = { top: [47, 127, 214], bot: [159, 211, 245], h: 12, day: 1 };
     var P = { clouds: [], stars: [], drops: [], flakes: [] };
     var sprites = {};
@@ -6585,16 +6635,18 @@
 
     // ---- 그림 재료
     function cloudSprite(c) {
-      var key = c.map(Math.round).join(',');
+      // 그려지는 크기에 맞춰 만든다(작게 만들어 늘리면 흐릿하게 깨져 보인다)
+      var q = clamp((P.sc || 1) * 1.6, 1, 6);
+      var key = c.map(Math.round).join(',') + '@' + q.toFixed(2);
       if (sprites[key]) return sprites[key];
-      var o = document.createElement('canvas'); o.width = 320; o.height = 140;
-      var x = o.getContext('2d');
+      var o = document.createElement('canvas'); o.width = Math.round(320 * q); o.height = Math.round(140 * q);
+      var x = o.getContext('2d'); x.scale(q, q);
       [[70, 90, 52], [125, 70, 62], [190, 74, 66], [245, 92, 48], [160, 96, 70]].forEach(function (p) {
         var g = x.createRadialGradient(p[0], p[1], 0, p[0], p[1], p[2]);
         g.addColorStop(0, rgb(c, 0.95)); g.addColorStop(0.55, rgb(c, 0.6)); g.addColorStop(1, rgb(c, 0));
         x.fillStyle = g; x.beginPath(); x.arc(p[0], p[1], p[2], 0, 6.2832); x.fill();
       });
-      var keys = Object.keys(sprites); if (keys.length > 6) delete sprites[keys[0]];
+      var keys = Object.keys(sprites); if (keys.length > 8) delete sprites[keys[0]];
       sprites[key] = o;
       return o;
     }
@@ -6603,32 +6655,34 @@
       var c = mix(base, [40, 48, 72], (cur.dark || 0) * 0.75);
       return mix(c, cur.bot, 0.18);
     }
-    function moonSprite() {
-      if (sprites.moon) return sprites.moon;
-      var o = document.createElement('canvas'); o.width = o.height = 96;
-      var x = o.getContext('2d'), r = 22;
+    function moonSprite(px) {
+      var sz = Math.max(96, Math.round(px)), mk = 'moon' + sz;
+      if (sprites[mk]) return sprites[mk];
+      var q = sz / 96;
+      var o = document.createElement('canvas'); o.width = o.height = sz;
+      var x = o.getContext('2d'), r = 22; x.scale(q, q);
       var age = ((Date.now() - Date.UTC(2000, 0, 6, 18, 14)) / 864e5 % 29.5306 + 29.5306) % 29.5306 / 29.5306; // 0 삭 · .5 보름
       var g = x.createRadialGradient(48, 48, 6, 48, 48, 48);
       g.addColorStop(0, 'rgba(235,240,255,0.30)'); g.addColorStop(1, 'rgba(235,240,255,0)');
       x.fillStyle = g; x.fillRect(0, 0, 96, 96);
-      var lit = document.createElement('canvas'); lit.width = lit.height = 96;
-      var l = lit.getContext('2d');
+      var lit = document.createElement('canvas'); lit.width = lit.height = sz;
+      var l = lit.getContext('2d'); l.scale(q, q);
       l.fillStyle = 'rgba(248,246,235,0.95)'; l.beginPath(); l.arc(48, 48, r, 0, 6.2832); l.fill();
       var f = age < 0.5 ? age * 2 : (1 - age) * 2, s = 2.1 * r * f;
       l.globalCompositeOperation = 'destination-out'; l.fillStyle = '#000'; l.beginPath(); l.arc(48 + (age < 0.5 ? -s : s), 48, r, 0, 6.2832); l.fill();
-      x.drawImage(lit, 0, 0);
-      sprites.moon = o; sprites.moonAt = Date.now();
+      x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(lit, 0, 0);
+      sprites[mk] = o;
       return o;
     }
     function setupParts() {
       if (!W) return;
-      var kd = kind(), hv = heavy(wx ? wx.code : null), sc = clamp(W / 700, 0.55, 1.3);
+      var kd = kind(), hv = heavy(wx ? wx.code : null), sc = clamp(window.innerWidth / 700, 0.55, 1.3) * (P.dpr || 1);
       var nc = { clear: 2, partly: 6, cloudy: 10, rain: 10, snow: 9, storm: 11, fog: 4 }[kd];
       P.clouds = []; for (var i = 0; i < nc; i++) { var s = 0.6 + Math.random() * 0.9; P.clouds.push({ x: Math.random() * 1.4 - 0.2, y: 0.03 + Math.random() * 0.4, s: s, v: 0.004 + Math.random() * 0.008, a: kd === 'clear' ? 0.45 : 0.55 + Math.random() * 0.35 }); }
-      P.sc = sc;
-      P.stars = []; for (i = 0; i < 90; i++) P.stars.push({ x: Math.random() * W, y: Math.random() * H * 0.6, r: 0.4 + Math.random() * 1.1, ph: Math.random() * 6.28 });
-      P.drops = []; if (kd === 'rain' || kd === 'storm') { var nd = hv ? 150 : 80; for (i = 0; i < nd; i++) P.drops.push({ x: Math.random() * W, y: Math.random() * H, l: 10 + Math.random() * 14, v: 700 + Math.random() * 400 }); }
-      P.flakes = []; if (kd === 'snow') { for (i = 0; i < (hv ? 120 : 70); i++) P.flakes.push({ x: Math.random() * W, y: Math.random() * H, r: 1 + Math.random() * 2.4, v: 25 + Math.random() * 40, ph: Math.random() * 6.28 }); }
+      P.sc = sc; // 구름 크기 기준(화면 폭 기준, CSS 픽셀) — 캔버스 점 수에 맞춰 곱해 쓴다
+      P.stars = []; for (i = 0; i < 90; i++) P.stars.push({ x: Math.random() * W, y: Math.random() * H * 0.6, r: (0.5 + Math.random() * 1.1) * (P.dpr || 1), ph: Math.random() * 6.28 });
+      P.drops = []; if (kd === 'rain' || kd === 'storm') { var nd = hv ? 150 : 80; for (i = 0; i < nd; i++) P.drops.push({ x: Math.random() * W, y: Math.random() * H, l: (10 + Math.random() * 14) * (P.dpr || 1), v: (700 + Math.random() * 400) * (P.dpr || 1) }); }
+      P.flakes = []; if (kd === 'snow') { for (i = 0; i < (hv ? 120 : 70); i++) P.flakes.push({ x: Math.random() * W, y: Math.random() * H, r: (1 + Math.random() * 2.4) * (P.dpr || 1), v: (25 + Math.random() * 40) * (P.dpr || 1), ph: Math.random() * 6.28 }); }
     }
 
     // ---- 그리기
@@ -6639,7 +6693,7 @@
       var kd = kind(), s = suns(), h = cur.h, i, p;
       // 해 / 달
       if (cur.day && (kd === 'clear' || kd === 'partly' || kd === 'cloudy')) {
-        var u = clamp((h - s.sr) / (s.ss - s.sr), 0, 1), sx = W * (0.12 + 0.76 * u), sy = H * (0.34 - 0.26 * Math.sin(Math.PI * u));
+        var u = clamp((h - s.sr) / (s.ss - s.sr), 0, 1), sx = W * (0.12 + 0.76 * u), sy = H * (0.42 - 0.2 * Math.sin(Math.PI * u));
         var warm = mix([255, 244, 214], [255, 150, 90], Math.pow(1 - Math.sin(Math.PI * u), 2));
         var R = Math.min(W, H) * 0.5, ga = kd === 'clear' ? 1 : kd === 'partly' ? 0.8 : 0.3;
         var g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R);
@@ -6648,9 +6702,9 @@
         if (kd !== 'cloudy') { ctx.fillStyle = rgb([255, 252, 240], 0.9 * ga); ctx.beginPath(); ctx.arc(sx, sy, Math.max(10, Math.min(W, H) * 0.028), 0, 6.2832); ctx.fill(); }
       } else if (!cur.day && (kd === 'clear' || kd === 'partly')) {
         var span = 24 - s.ss + s.sr, hh = h >= s.ss ? h - s.ss : h + 24 - s.ss, mu = clamp(hh / span, 0, 1);
-        var mx = W * (0.15 + 0.7 * mu), my = H * (0.3 - 0.22 * Math.sin(Math.PI * mu)), ms = Math.max(1, Math.min(W, H) / 420) * 1.5;
+        var mx = W * (0.15 + 0.7 * mu), my = H * (0.4 - 0.2 * Math.sin(Math.PI * mu)), ms = clamp(Math.min(window.innerWidth, window.innerHeight) / 9, 40, 80) / 44 * (P.dpr || 1);
         ctx.globalAlpha = kd === 'clear' ? 1 : 0.7;
-        ctx.drawImage(moonSprite(), mx - 48 * ms, my - 48 * ms, 96 * ms, 96 * ms);
+        ctx.drawImage(moonSprite(96 * ms), mx - 48 * ms, my - 48 * ms, 96 * ms, 96 * ms);
         ctx.globalAlpha = 1;
       }
       // 별
@@ -6684,7 +6738,7 @@
       }
       // 비
       if (animate && P.drops.length) {
-        ctx.strokeStyle = 'rgba(205,222,245,0.42)'; ctx.lineWidth = 1.1; ctx.beginPath();
+        ctx.strokeStyle = 'rgba(205,222,245,0.42)'; ctx.lineWidth = 1.1 * (P.dpr || 1); ctx.beginPath();
         for (i = 0; i < P.drops.length; i++) {
           p = P.drops[i]; p.y += p.v * dt; p.x -= p.v * dt * 0.16;
           if (p.y > H) { p.y = -p.l; p.x = Math.random() * (W + 60); }
@@ -6696,7 +6750,7 @@
       if (animate && P.flakes.length) {
         ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.beginPath();
         for (i = 0; i < P.flakes.length; i++) {
-          p = P.flakes[i]; p.y += p.v * dt; p.x += Math.sin(T * 0.9 + p.ph) * 14 * dt;
+          p = P.flakes[i]; p.y += p.v * dt; p.x += Math.sin(T * 0.9 + p.ph) * 14 * (P.dpr || 1) * dt;
           if (p.y > H + 4) { p.y = -4; p.x = Math.random() * W; }
           ctx.moveTo(p.x + p.r, p.y); ctx.arc(p.x, p.y, p.r, 0, 6.2832);
         }
@@ -6707,7 +6761,7 @@
       raf = 0;
       if (document.hidden || mode !== 'on' || !ctx) return;
       raf = requestAnimationFrame(loop);
-      if (ts - last < 33) return; // 초당 30번 정도만 그려 배터리를 아낀다
+      if (ts - last < 50 || ts - lastScroll < 140) return; // 초당 20번만, 화면을 밀고 있을 땐 쉬어서 배터리와 부드러움을 지킨다
       var dt = Math.min(0.1, (ts - last) / 1000); last = ts;
       draw(dt, true);
     }
@@ -6717,7 +6771,10 @@
     // ---- 화면 만들기 / 크기
     function resize() {
       if (!cv) return;
-      var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var area = window.innerWidth * window.innerHeight * dpr * dpr;
+      if (area > 3.4e6) dpr *= Math.sqrt(3.4e6 / area); // 아이패드·큰 화면은 점 수를 제한해 버벅이지 않게
+      P.dpr = dpr; sprites = {};
       W = Math.round(window.innerWidth * dpr); H = Math.round(window.innerHeight * dpr);
       cv.width = W; cv.height = H;
       setupParts(); still();
@@ -6795,6 +6852,7 @@
       setMode(next);
       showToast(next === 'on' ? '🌤 하늘 배경: 날씨·시간대에 맞게 천천히 움직여요' : next === 'still' ? '🌤 하늘 배경: 움직이지 않는 배경' : '🌤 하늘 배경을 껐어요', 2600);
     });
+    window.addEventListener('scroll', function () { lastScroll = performance.now(); }, { passive: true, capture: true });
     document.addEventListener('visibilitychange', function () { if (!document.hidden) { tick(); start(); } });
     setInterval(tick, 60000);
     // 내 위치를 받은 뒤(처음 열 때 몇 초 걸린다) 위치가 달라졌으면 그 지역 날씨로 다시 받는다
