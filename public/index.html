@@ -34,6 +34,7 @@
   */
   :root {
     --bg: #eff2ea;
+    --bg-rgb: 239, 242, 234;
     --surface: #fbfaf2;
     --surface-2: #e5e7da;
     --ink: #212b24;
@@ -53,6 +54,7 @@
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #141c17;
+      --bg-rgb: 20, 28, 23;
       --surface: #1c2620;
       --surface-2: #223029;
       --ink: #e9eadf;
@@ -68,6 +70,7 @@
   }
   :root[data-theme="dark"] {
     --bg: #141c17;
+    --bg-rgb: 20, 28, 23;
     --surface: #1c2620;
     --surface-2: #223029;
     --ink: #e9eadf;
@@ -942,6 +945,18 @@
     padding-top: calc(18px + env(safe-area-inset-top, 0px)); overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
   }
   .sheet-backdrop > .sheet .sheet-head { position: sticky; top: calc(-18px - env(safe-area-inset-top, 0px)); background: var(--bg); padding: 4px 0 10px; z-index: 2; }
+  /* 하늘 배경: 날씨·시간대에 맞는 하늘이 앱 바탕에 깔린다. 글씨가 잘 보이게 위에 바탕색 막을 얹는다. */
+  .sky-line { display: flex; align-items: center; gap: 8px; margin: -4px 0 8px; font-size: 0.74rem; color: var(--ink-dim); min-height: 24px; }
+  .sky-line #sky-txt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sky-credit { color: inherit; opacity: 0.6; font-size: 0.62rem; text-decoration: none; margin-left: 2px; }
+  .sky-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink-dim); font-size: 0.7rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; cursor: pointer; white-space: nowrap; flex: none; }
+  #sky-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; transition: background 1.2s linear; }
+  #sky-bg canvas { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; display: block; }
+  .sky-veil { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(var(--bg-rgb), calc(0.12 * var(--vk, 1))) 0%, rgba(var(--bg-rgb), calc(0.34 * var(--vk, 1))) 40%, rgba(var(--bg-rgb), calc(0.5 * var(--vk, 1))) 100%); }
+  html.sky-on { background: var(--bg); }
+  html.sky-on body { background: transparent; }
+  html.sky-on header.top { background: rgba(var(--bg-rgb), 0.56); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+  @media print { #sky-bg { display: none !important; } html.sky-on, html.sky-on body { background: #fff !important; } }
 </style>
 </head>
 <body>
@@ -957,6 +972,7 @@
       </div>
       <button type="button" class="admin-btn" id="admin-btn" hidden>공유 설정</button>
     </div>
+    <div class="sky-line"><span id="sky-txt"></span><button type="button" id="sky-btn" class="sky-btn"></button></div>
     <nav class="segmented" role="tablist">
       <button type="button" class="active" data-view="map" role="tab" aria-selected="true">내 주변 검색</button>
       <button type="button" data-view="mtn" role="tab" aria-selected="false">산</button>
@@ -1495,6 +1511,7 @@
       else document.documentElement.setAttribute('data-theme', t);
       try { if (t === 'system') localStorage.removeItem('theme'); else localStorage.setItem('theme', t); } catch (e) {}
       paintThemeButtons();
+      try { if (typeof sky !== 'undefined' && sky) sky.tick(); } catch (_) {}
     });
   });
   paintThemeButtons();
@@ -6462,6 +6479,332 @@
   function meIcon() {
     return naver.maps.Point ? { content: '<div class="me-dot" title="내 위치"></div>', anchor: new naver.maps.Point(9, 9) } : undefined;
   }
+
+  // ================= 하늘 배경 (현재 날씨 + 시간대) =================
+  // 아이패드 배경화면처럼 앱 바탕이 지금 시각(일출·일몰 기준)과 날씨에 맞는 하늘로 바뀐다.
+  // 날씨는 Open-Meteo(키 없음)에서 받고(좌표는 약 10km 단위로 뭉뚱그려 보냄), 못 받으면 시간대 색만 보여 준다.
+  // 켜짐(움직임) → 정지 → 꺼짐 순서로 위쪽 줄의 버튼을 눌러 바꾼다. 앱을 숨기면 움직임은 멈춘다.
+  var sky = (function () {
+    var MODE_KEY = 'ts.sky', WX_KEY = 'ts.wx';
+    var SEOUL = { lat: 37.5665, lng: 126.978 };
+    var mode = 'on';
+    try {
+      var m0 = localStorage.getItem(MODE_KEY);
+      if (m0 === 'on' || m0 === 'still' || m0 === 'off') mode = m0;
+      else if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) mode = 'still';
+    } catch (_) {}
+    var txt = document.getElementById('sky-txt'), btn = document.getElementById('sky-btn');
+    var wx = null, root = null, cv = null, ctx = null, W = 0, H = 0, raf = 0, last = 0, T = 0, fetching = false;
+    var cur = { top: [47, 127, 214], bot: [159, 211, 245], h: 12, day: 1 };
+    var P = { clouds: [], stars: [], drops: [], flakes: [] };
+    var sprites = {};
+
+    function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+    function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
+    function lum(c) { return 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]; }
+    function rgb(c, a) { return 'rgba(' + Math.round(c[0]) + ',' + Math.round(c[1]) + ',' + Math.round(c[2]) + ',' + (a == null ? 1 : a) + ')'; }
+    function hm(h) { var m = Math.round(h * 60); return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+    function kst() {
+      var d = new Date(Date.now() + 9 * 3600e3);
+      return { h: d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600, doy: Math.floor((d.getTime() - Date.UTC(d.getUTCFullYear(), 0, 0)) / 864e5), ymd: d.toISOString().slice(0, 10) };
+    }
+    function suns() {
+      var k = kst();
+      if (wx && wx.ymd === k.ymd && wx.sr != null && wx.ss != null) return { sr: wx.sr, ss: wx.ss };
+      var a = 2 * Math.PI * (k.doy + 10) / 365; // 날씨를 못 받았을 때: 우리나라 일출·일몰을 계절로 어림
+      return { sr: 6.4 + 1.2 * Math.cos(a), ss: 18.3 - 1.0 * Math.cos(a) };
+    }
+    var PAL = {
+      night: [[11, 16, 38], [28, 42, 74]], dawn: [[59, 63, 115], [242, 165, 160]], morning: [[90, 160, 216], [255, 217, 168]],
+      day: [[47, 127, 214], [159, 211, 245]], golden: [[74, 143, 208], [255, 208, 138]], sunset: [[74, 63, 122], [255, 138, 92]], dusk: [[29, 35, 80], [138, 90, 154]]
+    };
+    function timeColors(h) {
+      var s = suns();
+      var K = [[s.sr - 1.3, 'night'], [s.sr - 0.35, 'dawn'], [s.sr + 0.45, 'morning'], [s.sr + 2.2, 'day'], [s.ss - 2.2, 'day'], [s.ss - 0.7, 'golden'], [s.ss + 0.05, 'sunset'], [s.ss + 0.7, 'dusk'], [s.ss + 1.5, 'night']];
+      if (h <= K[0][0] || h >= K[K.length - 1][0]) return PAL.night;
+      for (var i = 0; i < K.length - 1; i++) {
+        if (h < K[i + 1][0]) {
+          var t = (h - K[i][0]) / (K[i + 1][0] - K[i][0]), a = PAL[K[i][1]], b = PAL[K[i + 1][1]];
+          return [mix(a[0], b[0], t), mix(a[1], b[1], t)];
+        }
+      }
+      return PAL.night;
+    }
+    function kindOf(c) {
+      if (c == null || c <= 1) return 'clear';
+      if (c === 2) return 'partly';
+      if (c === 3) return 'cloudy';
+      if (c === 45 || c === 48) return 'fog';
+      if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) return 'rain';
+      if ((c >= 71 && c <= 77) || c === 85 || c === 86) return 'snow';
+      if (c >= 95) return 'storm';
+      return 'clear';
+    }
+    function heavy(c) { return c === 65 || c === 67 || c === 82 || c === 75 || c === 86 || c >= 95; }
+    var GRAY = { clear: 0, partly: 0.15, cloudy: 0.5, fog: 0.55, rain: 0.6, snow: 0.4, storm: 0.75 };
+    var WTXT = { 0: '맑음', 1: '대체로 맑음', 2: '구름 조금', 3: '흐림', 45: '안개', 48: '안개', 51: '이슬비', 53: '이슬비', 55: '이슬비', 56: '언 이슬비', 57: '언 이슬비', 61: '비', 63: '비', 65: '강한 비', 66: '얼어붙는 비', 67: '얼어붙는 비', 71: '눈', 73: '눈', 75: '폭설', 77: '싸락눈', 80: '소나기', 81: '소나기', 82: '강한 소나기', 85: '눈 소나기', 86: '눈 소나기', 95: '뇌우', 96: '뇌우', 99: '뇌우' };
+    function kind() { return kindOf(wx ? wx.code : null); }
+    function icon(k, day) {
+      if (k === 'clear') return day ? '☀️' : '🌙';
+      if (k === 'partly') return day ? '⛅' : '☁️';
+      if (k === 'cloudy') return '☁️';
+      if (k === 'fog') return '🌫️';
+      if (k === 'rain') return '🌧️';
+      if (k === 'snow') return '❄️';
+      return '⛈️';
+    }
+
+    // ---- 색 계산 (시간대 색에 날씨를 섞는다)
+    function compute() {
+      var k = kst(), tc = timeColors(k.h), g = GRAY[kind()] || 0;
+      var s = suns(), code = wx ? wx.code : null, kd = kind();
+      function adj(c) {
+        var l = lum(c), gr = [l, l, l];
+        if (kd === 'storm') gr = [l * 0.7, l * 0.72, l * 0.8];
+        else if (kd === 'fog' || kd === 'snow') gr = [l + 22, l + 24, l + 28];
+        else if (kd === 'rain') gr = [l * 0.92, l * 0.96, l * 1.02];
+        return mix(c, gr, g);
+      }
+      cur = { top: adj(tc[0]), bot: adj(tc[1]), h: k.h, day: k.h > s.sr && k.h < s.ss ? 1 : 0, dark: clamp((70 - lum(tc[0])) / 50, 0, 1), code: code };
+    }
+    function applyBg() {
+      if (!root) return;
+      // 글씨 색과 하늘이 비슷하게 어두우면(화이트 모드의 밤하늘, 다크 모드의 밝은 낮) 바탕색 막을 진하게 해서 글씨를 지킨다
+      var vk = 1;
+      try {
+        var bgc = (getComputedStyle(document.documentElement).getPropertyValue('--bg-rgb') || '').split(',').map(Number);
+        if (bgc.length === 3 && bgc.every(isFinite)) {
+          var skyl = lum(mix(cur.top, cur.bot, 0.5)), bgl = lum(bgc);
+          if (bgl > 128 && skyl < 125) vk = 1 + (125 - skyl) / 125 * 1.3;
+          else if (bgl <= 128 && skyl > 150) vk = 1 + (skyl - 150) / 100 * 1.2;
+        }
+      } catch (_) {}
+      root.style.setProperty('--vk', vk.toFixed(2));
+      root.style.background = 'linear-gradient(180deg,' + rgb(cur.top) + ' 0%,' + rgb(mix(cur.top, cur.bot, 0.55)) + ' 55%,' + rgb(cur.bot) + ' 100%)';
+    }
+
+    // ---- 그림 재료
+    function cloudSprite(c) {
+      var key = c.map(Math.round).join(',');
+      if (sprites[key]) return sprites[key];
+      var o = document.createElement('canvas'); o.width = 320; o.height = 140;
+      var x = o.getContext('2d');
+      [[70, 90, 52], [125, 70, 62], [190, 74, 66], [245, 92, 48], [160, 96, 70]].forEach(function (p) {
+        var g = x.createRadialGradient(p[0], p[1], 0, p[0], p[1], p[2]);
+        g.addColorStop(0, rgb(c, 0.95)); g.addColorStop(0.55, rgb(c, 0.6)); g.addColorStop(1, rgb(c, 0));
+        x.fillStyle = g; x.beginPath(); x.arc(p[0], p[1], p[2], 0, 6.2832); x.fill();
+      });
+      var keys = Object.keys(sprites); if (keys.length > 6) delete sprites[keys[0]];
+      sprites[key] = o;
+      return o;
+    }
+    function cloudRGB() {
+      var base = { clear: [250, 250, 252], partly: [250, 250, 252], cloudy: [244, 245, 248], snow: [246, 248, 252], rain: [185, 193, 204], storm: [110, 118, 132], fog: [220, 224, 228] }[kind()];
+      var c = mix(base, [40, 48, 72], (cur.dark || 0) * 0.75);
+      return mix(c, cur.bot, 0.18);
+    }
+    function moonSprite() {
+      if (sprites.moon) return sprites.moon;
+      var o = document.createElement('canvas'); o.width = o.height = 96;
+      var x = o.getContext('2d'), r = 22;
+      var age = ((Date.now() - Date.UTC(2000, 0, 6, 18, 14)) / 864e5 % 29.5306 + 29.5306) % 29.5306 / 29.5306; // 0 삭 · .5 보름
+      var g = x.createRadialGradient(48, 48, 6, 48, 48, 48);
+      g.addColorStop(0, 'rgba(235,240,255,0.30)'); g.addColorStop(1, 'rgba(235,240,255,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 96, 96);
+      var lit = document.createElement('canvas'); lit.width = lit.height = 96;
+      var l = lit.getContext('2d');
+      l.fillStyle = 'rgba(248,246,235,0.95)'; l.beginPath(); l.arc(48, 48, r, 0, 6.2832); l.fill();
+      var f = age < 0.5 ? age * 2 : (1 - age) * 2, s = 2.1 * r * f;
+      l.globalCompositeOperation = 'destination-out'; l.fillStyle = '#000'; l.beginPath(); l.arc(48 + (age < 0.5 ? -s : s), 48, r, 0, 6.2832); l.fill();
+      x.drawImage(lit, 0, 0);
+      sprites.moon = o; sprites.moonAt = Date.now();
+      return o;
+    }
+    function setupParts() {
+      if (!W) return;
+      var kd = kind(), hv = heavy(wx ? wx.code : null), sc = clamp(W / 700, 0.55, 1.3);
+      var nc = { clear: 2, partly: 6, cloudy: 10, rain: 10, snow: 9, storm: 11, fog: 4 }[kd];
+      P.clouds = []; for (var i = 0; i < nc; i++) { var s = 0.6 + Math.random() * 0.9; P.clouds.push({ x: Math.random() * 1.4 - 0.2, y: 0.03 + Math.random() * 0.4, s: s, v: 0.004 + Math.random() * 0.008, a: kd === 'clear' ? 0.45 : 0.55 + Math.random() * 0.35 }); }
+      P.sc = sc;
+      P.stars = []; for (i = 0; i < 90; i++) P.stars.push({ x: Math.random() * W, y: Math.random() * H * 0.6, r: 0.4 + Math.random() * 1.1, ph: Math.random() * 6.28 });
+      P.drops = []; if (kd === 'rain' || kd === 'storm') { var nd = hv ? 150 : 80; for (i = 0; i < nd; i++) P.drops.push({ x: Math.random() * W, y: Math.random() * H, l: 10 + Math.random() * 14, v: 700 + Math.random() * 400 }); }
+      P.flakes = []; if (kd === 'snow') { for (i = 0; i < (hv ? 120 : 70); i++) P.flakes.push({ x: Math.random() * W, y: Math.random() * H, r: 1 + Math.random() * 2.4, v: 25 + Math.random() * 40, ph: Math.random() * 6.28 }); }
+    }
+
+    // ---- 그리기
+    function draw(dt, animate) {
+      if (!ctx) return;
+      T += dt;
+      ctx.clearRect(0, 0, W, H);
+      var kd = kind(), s = suns(), h = cur.h, i, p;
+      // 해 / 달
+      if (cur.day && (kd === 'clear' || kd === 'partly' || kd === 'cloudy')) {
+        var u = clamp((h - s.sr) / (s.ss - s.sr), 0, 1), sx = W * (0.12 + 0.76 * u), sy = H * (0.34 - 0.26 * Math.sin(Math.PI * u));
+        var warm = mix([255, 244, 214], [255, 150, 90], Math.pow(1 - Math.sin(Math.PI * u), 2));
+        var R = Math.min(W, H) * 0.5, ga = kd === 'clear' ? 1 : kd === 'partly' ? 0.8 : 0.3;
+        var g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R);
+        g.addColorStop(0, rgb(warm, 0.75 * ga)); g.addColorStop(0.12, rgb(warm, 0.35 * ga)); g.addColorStop(1, rgb(warm, 0));
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        if (kd !== 'cloudy') { ctx.fillStyle = rgb([255, 252, 240], 0.9 * ga); ctx.beginPath(); ctx.arc(sx, sy, Math.max(10, Math.min(W, H) * 0.028), 0, 6.2832); ctx.fill(); }
+      } else if (!cur.day && (kd === 'clear' || kd === 'partly')) {
+        var span = 24 - s.ss + s.sr, hh = h >= s.ss ? h - s.ss : h + 24 - s.ss, mu = clamp(hh / span, 0, 1);
+        var mx = W * (0.15 + 0.7 * mu), my = H * (0.3 - 0.22 * Math.sin(Math.PI * mu)), ms = Math.max(1, Math.min(W, H) / 420) * 1.5;
+        ctx.globalAlpha = kd === 'clear' ? 1 : 0.7;
+        ctx.drawImage(moonSprite(), mx - 48 * ms, my - 48 * ms, 96 * ms, 96 * ms);
+        ctx.globalAlpha = 1;
+      }
+      // 별
+      if (cur.dark > 0.05 && (kd === 'clear' || kd === 'partly')) {
+        var sa = cur.dark * (kd === 'clear' ? 1 : 0.5);
+        ctx.fillStyle = '#fff';
+        for (i = 0; i < P.stars.length; i++) {
+          p = P.stars[i];
+          ctx.globalAlpha = sa * (animate ? 0.45 + 0.55 * Math.sin(T * 1.6 + p.ph) : 0.8);
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.2832); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+      // 구름
+      var spr = cloudSprite(cloudRGB()), cw;
+      for (i = 0; i < P.clouds.length; i++) {
+        p = P.clouds[i]; cw = 320 * p.s * P.sc;
+        if (animate) { p.x += p.v * dt; if (p.x * W > W + cw * 0.2) p.x = -cw / W - 0.05; }
+        ctx.globalAlpha = p.a;
+        ctx.drawImage(spr, p.x * W - cw / 2, p.y * H, cw, cw * 140 / 320);
+      }
+      ctx.globalAlpha = 1;
+      // 안개
+      if (kd === 'fog') {
+        for (i = 0; i < 4; i++) {
+          var fy = H * (0.18 + i * 0.22), fx = animate ? Math.sin(T * 0.08 + i) * 40 : 0;
+          var fg = ctx.createLinearGradient(0, fy - H * 0.14, 0, fy + H * 0.14);
+          fg.addColorStop(0, 'rgba(236,239,243,0)'); fg.addColorStop(0.5, 'rgba(236,239,243,' + (0.16 + cur.day * 0.1) + ')'); fg.addColorStop(1, 'rgba(236,239,243,0)');
+          ctx.fillStyle = fg; ctx.fillRect(fx - 40, fy - H * 0.14, W + 80, H * 0.28);
+        }
+      }
+      // 비
+      if (animate && P.drops.length) {
+        ctx.strokeStyle = 'rgba(205,222,245,0.42)'; ctx.lineWidth = 1.1; ctx.beginPath();
+        for (i = 0; i < P.drops.length; i++) {
+          p = P.drops[i]; p.y += p.v * dt; p.x -= p.v * dt * 0.16;
+          if (p.y > H) { p.y = -p.l; p.x = Math.random() * (W + 60); }
+          ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.l * 0.16, p.y + p.l);
+        }
+        ctx.stroke();
+      }
+      // 눈
+      if (animate && P.flakes.length) {
+        ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.beginPath();
+        for (i = 0; i < P.flakes.length; i++) {
+          p = P.flakes[i]; p.y += p.v * dt; p.x += Math.sin(T * 0.9 + p.ph) * 14 * dt;
+          if (p.y > H + 4) { p.y = -4; p.x = Math.random() * W; }
+          ctx.moveTo(p.x + p.r, p.y); ctx.arc(p.x, p.y, p.r, 0, 6.2832);
+        }
+        ctx.fill();
+      }
+    }
+    function loop(ts) {
+      raf = 0;
+      if (document.hidden || mode !== 'on' || !ctx) return;
+      raf = requestAnimationFrame(loop);
+      if (ts - last < 33) return; // 초당 30번 정도만 그려 배터리를 아낀다
+      var dt = Math.min(0.1, (ts - last) / 1000); last = ts;
+      draw(dt, true);
+    }
+    function start() { if (mode === 'on' && !raf && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(loop); } }
+    function still() { if (mode !== 'on') draw(0, false); }
+
+    // ---- 화면 만들기 / 크기
+    function resize() {
+      if (!cv) return;
+      var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      W = Math.round(window.innerWidth * dpr); H = Math.round(window.innerHeight * dpr);
+      cv.width = W; cv.height = H;
+      setupParts(); still();
+    }
+    function build() {
+      document.documentElement.classList.add('sky-on');
+      if (!root) {
+        root = document.createElement('div'); root.id = 'sky-bg'; root.setAttribute('aria-hidden', 'true');
+        cv = document.createElement('canvas'); ctx = cv.getContext('2d');
+        var veil = document.createElement('div'); veil.className = 'sky-veil';
+        root.appendChild(cv); root.appendChild(veil); document.body.appendChild(root);
+        var rt = 0; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(resize, 150); });
+      }
+      root.style.display = '';
+      compute(); applyBg(); resize(); start();
+    }
+    function teardown() {
+      document.documentElement.classList.remove('sky-on');
+      if (root) root.style.display = 'none';
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    }
+
+    // ---- 날씨 받기
+    function pos() { if (geo && geo.pos) return geo.pos; var sv = geoSaved(); return sv ? { lat: sv.lat, lng: sv.lng } : SEOUL; }
+    function parseHM(s) { var m = /T(\d\d):(\d\d)/.exec(s || ''); return m ? Number(m[1]) + Number(m[2]) / 60 : null; }
+    function fetchWx(force) {
+      if (mode === 'off' || fetching) return;
+      var p = pos(), la = Math.round(p.lat * 10) / 10, lo = Math.round(p.lng * 10) / 10;
+      if (!force && wx && wx.la === la && wx.lo === lo && Date.now() - wx.at < 25 * 60e3) return;
+      fetching = true;
+      var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + la + '&longitude=' + lo + '&current=temperature_2m,weather_code&daily=sunrise,sunset&timezone=Asia%2FSeoul&forecast_days=1';
+      fetch(url).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j || !j.current) throw new Error('no data');
+        var d0 = j.daily && j.daily.sunrise && j.daily.sunrise[0];
+        wx = { la: la, lo: lo, at: Date.now(), code: j.current.weather_code, temp: j.current.temperature_2m, sr: parseHM(d0), ss: parseHM(j.daily.sunset && j.daily.sunset[0]), ymd: d0 ? d0.slice(0, 10) : null };
+        try { localStorage.setItem(WX_KEY, JSON.stringify(wx)); } catch (_) {}
+        refresh();
+      }).catch(function () { /* 날씨를 못 받으면 시간대 색만 보여 준다 */ }).then(function () { fetching = false; });
+    }
+
+    // ---- 위쪽 한 줄
+    function paintBtn() {
+      if (!btn) return;
+      btn.textContent = mode === 'on' ? '🌤 움직임' : mode === 'still' ? '🌤 정지' : '🌤 꺼짐';
+      btn.title = '하늘 배경: ' + (mode === 'on' ? '날씨·시간대에 맞게 천천히 움직여요' : mode === 'still' ? '움직이지 않는 배경' : '배경을 끄고 기본 색을 써요') + ' (누르면 바뀌어요)';
+    }
+    function paintLine() {
+      if (!txt) return;
+      if (mode === 'off' || !wx || wx.code == null) { txt.textContent = ''; return; }
+      var s = suns(), k = kind(), t = Math.round(wx.temp);
+      txt.textContent = icon(k, cur.day) + ' ' + (WTXT[wx.code] || '') + ' ' + t + '° · 일출 ' + hm(s.sr) + ' 일몰 ' + hm(s.ss) + ' ';
+      var a = document.createElement('a'); a.href = 'https://open-meteo.com/'; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Open-Meteo'; a.className = 'sky-credit';
+      txt.appendChild(a);
+    }
+    function refresh() {
+      if (mode === 'off') { paintLine(); return; }
+      compute(); applyBg(); setupParts(); still(); paintLine();
+    }
+    function setMode(m) {
+      mode = m;
+      try { localStorage.setItem(MODE_KEY, m); } catch (_) {}
+      if (m === 'off') { teardown(); paintLine(); }
+      else { build(); fetchWx(false); paintLine(); }
+      paintBtn();
+    }
+    function tick() {
+      if (mode === 'off') return;
+      compute(); applyBg(); paintLine(); still();
+      fetchWx(false);
+    }
+
+    try { var c0 = JSON.parse(localStorage.getItem(WX_KEY) || 'null'); if (c0 && c0.at && Date.now() - c0.at < 6 * 3600e3) wx = c0; } catch (_) {}
+    if (btn) btn.addEventListener('click', function () {
+      var next = mode === 'on' ? 'still' : mode === 'still' ? 'off' : 'on';
+      setMode(next);
+      showToast(next === 'on' ? '🌤 하늘 배경: 날씨·시간대에 맞게 천천히 움직여요' : next === 'still' ? '🌤 하늘 배경: 움직이지 않는 배경' : '🌤 하늘 배경을 껐어요', 2600);
+    });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) { tick(); start(); } });
+    setInterval(tick, 60000);
+    // 내 위치를 받은 뒤(처음 열 때 몇 초 걸린다) 위치가 달라졌으면 그 지역 날씨로 다시 받는다
+    setTimeout(function () { fetchWx(false); }, 4000);
+    setTimeout(function () { fetchWx(false); }, 12000);
+    paintBtn();
+    if (mode !== 'off') { build(); paintLine(); fetchWx(false); }
+    try { var mq = window.matchMedia('(prefers-color-scheme: dark)'); (mq.addEventListener ? mq.addEventListener('change', function () { setTimeout(tick, 50); }) : 0); } catch (_) {}
+    return { setMode: setMode, refresh: refresh, tick: tick };
+  })();
 
   // ================= 내 사진 등록 =================
   function openPhotoSheet(category, view, opt) {
