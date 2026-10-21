@@ -6061,6 +6061,7 @@
             if (st === K.services.Status.OK) res.forEach(function (r) {
               // 낱말로 찾은 것은 정말 마트·슈퍼인 곳만 (주차장·편의점 등은 뺀다)
               if (kw && !/> (슈퍼마켓|대형마트|식자재|농협하나로마트|하나로마트)/.test(r.category_name || '')) return;
+              if (code === 'CE7' && !kw && isThemeCafe(r)) return; // 카페 단추: 키즈카페 같은 체험형은 뺀다
               r._code = code; out.push(r);
             });
             pages++;
@@ -6080,6 +6081,17 @@
           return { list: list, full: rs.some(function (r) { return r.full; }) };
         });
       }
+      // 카페: 이름난 커피 프랜차이즈(메가MGC커피·컴포즈커피·빽다방 …)는 가까운 지점을 따로 찾아 꼭 보이게 한다 (빽빽한 동네에서도 빠지지 않게)
+      var brandP = (rad && P.on.CE7) ? Promise.all(CAFE_BRANDS.map(function (b) {
+        return new Promise(function (resolve) {
+          try {
+            places.keywordSearch(b, function (res, st) {
+              if (st !== K.services.Status.OK) return resolve([]);
+              resolve(res.filter(function (r) { return /카페|커피/.test(r.category_name || '') && !isThemeCafe(r) && distKm(rad.lat, rad.lng, Number(r.y), Number(r.x)) <= rad.m / 1000; }).slice(0, 3));
+            }, { location: new K.LatLng(rad.lat, rad.lng), radius: Math.round(rad.m), sort: K.services.SortBy.DISTANCE, size: 15 });
+          } catch (e) { resolve([]); }
+        });
+      })) : Promise.resolve([]);
       await Promise.all(codes.map(function (code) {
         if (!rad) return search(code, { bounds: bounds, size: 15 }, 1).then(function (r) { found = found.concat(r.list); });
         // 반경 모드: 먼저 내 위치에서 가까운 순으로 찾아 반경 안 전부가 45곳 이하면 그대로 다 보여 준다.
@@ -6112,6 +6124,8 @@
           found = found.concat(all);
         });
       }));
+      var brandRes = await brandP;
+      brandRes.forEach(function (list) { list.forEach(function (r) { r._code = 'CE7'; found.unshift(r); }); });
       if (seq !== P.seq) return;
       clear();
       var seen = {};
@@ -6405,6 +6419,8 @@
       } else {
         add(await kakaoSearch(q, { size: 15 }).catch(function () { return []; }));
       }
+      var cafeQ = code === 'CE7' || /카페|커피/.test(q);
+      if (cafeQ && !THEME_Q.test(q)) rows = rows.filter(function (x) { return !isThemeCafe(x); });
       var out = rows.map(function (x) {
         var s = kakaoToShop(x), parts = String(x.category_name || '').split(' > '), cat = (parts.length >= 4 ? parts[parts.length - 2] : parts[parts.length - 1]) || '장소';
         var v = shopView(s); v.badge = cat; v.ph = '📍';
@@ -6423,6 +6439,7 @@
     if (seq !== msSeq) return;
     // 이미 나온 곳(이름이 같고 200m 안)은 생활 결과에서 뺀다
     var all = local.concat(more);
+    if ((catCodeOf(q) === 'CE7' || /카페|커피/.test(q)) && !THEME_Q.test(q)) all = all.filter(function (y) { return !/키즈|보드게임|만화카페|애견|고양이|룸카페|방탈출/.test((y.item && y.item.name) || ''); });
     var lifeByCat = life.byCat;
     life = life.filter(function (x) {
       return !all.some(function (y) { var v = y.view, it = y.item || {}; var la = v ? v.lat : Number(it.mapY || it.lat), lo = v ? v.lng : Number(it.mapX || it.lng); return msNorm(it.name) === msNorm(x.item.name) && la && Math.abs(la - x.view.lat) < 0.002 && Math.abs(lo - x.view.lng) < 0.0025; });
@@ -9362,6 +9379,12 @@
   var CAT_CODE = { 카페: 'CE7', 커피: 'CE7', 커피숍: 'CE7', 커피전문점: 'CE7', 편의점: 'CS2', 약국: 'PM9', 주유소: 'OL7', 충전소: 'OL7', 주차장: 'PK6', 마트: 'MT1', 대형마트: 'MT1', 은행: 'BK9', 병원: 'HP8', 음식점: 'FD6', 식당: 'FD6', 숙박: 'AD5', 숙소: 'AD5', 호텔: 'AD5', 지하철: 'SW8', 지하철역: 'SW8' };
   // 카페를 찾을 때 가까운 45곳 안에 큰 체인이 빠지지 않게, 이름난 프랜차이즈는 따로 가까운 지점을 더 찾아 맨 위에 보여 준다
   var CAFE_BRANDS = ['메가MGC커피', '컴포즈커피', '빽다방', '스타벅스', '이디야커피', '투썸플레이스', '할리스', '매머드커피', '더벤티', '파스쿠찌', '커피빈', '폴바셋', '공차', '탐앤탐스', '엔제리너스', '요거프레소', '카페베네', '던킨', '더리터', '커피에반하다'];
+  // 카페 검색·단추에서는 커피를 파는 곳만: 키즈카페·보드게임카페·만화카페·애견/고양이카페·룸카페 같은 체험형은 뺀다
+  function isThemeCafe(r) {
+    var c = String(r.category_name || ''), n = String(r.place_name || '');
+    return /키즈카페|보드게임|보드카페|만화카페|애견|고양이|룸카페|방탈출|캐릭터카페|스터디카페/.test(c) || /키즈|보드게임|보드카페|만화카페|애견카페|고양이카페|룸카페|방탈출|스터디카페/.test(n);
+  }
+  var THEME_Q = /키즈|보드|만화|애견|고양이|룸카페|방탈출|스터디/;
   var BRAND_ALIAS = { 메가커피: '메가MGC커피', 메가: '메가MGC커피', 메가엠지씨: '메가MGC커피', 컴포즈: '컴포즈커피', 빽: '빽다방', 스벅: '스타벅스', 투썸: '투썸플레이스', 이디야: '이디야커피', 매머드: '매머드커피', 벤티: '더벤티', 폴바셋: '폴바셋', 탐앤탐스: '탐앤탐스' };
   function catCodeOf(q) {
     var k = String(q || '').replace(/\s+/g, '').replace(/^(내주변|근처|주변|가까운)/, '').replace(/(내주변|근처|주변)$/, '');
