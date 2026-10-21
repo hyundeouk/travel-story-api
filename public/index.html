@@ -6372,14 +6372,38 @@
       var c = null;
       try { if (state.map && state.map.getCenter) { var cc = state.map.getCenter(); c = { lat: cc.lat(), lng: cc.lng() }; } } catch (_) {}
       if (!c && geo.pos) c = geo.pos;
-      var opt = { size: 15 };
-      if (c) { opt.location = new kakao.maps.LatLng(c.lat, c.lng); opt.sort = kakao.maps.services.SortBy ? kakao.maps.services.SortBy.ACCURACY : undefined; }
-      var r = await kakaoSearch(q, opt).catch(function () { return []; });
-      return r.map(function (x) {
-        var s = kakaoToShop(x), cat = String(x.category_name || '').split(' > ').slice(-1)[0] || '장소';
+      var SB = kakao.maps.services.SortBy || {};
+      var code = catCodeOf(q), rows = [], seenId = {};
+      function add(list) { (list || []).forEach(function (x) { if (x && !seenId[x.id]) { seenId[x.id] = 1; rows.push(x); } }); }
+      if (code && c) {
+        // 업종 검색: 지도 가운데(없으면 내 위치) 3km 안을 가까운 순으로 최대 45곳. 하나도 없으면 20km까지 넓힌다.
+        var ll = new kakao.maps.LatLng(c.lat, c.lng);
+        for (var rad of [3000, 20000]) {
+          for (var pg = 1; pg <= 3; pg++) {
+            var cr = await kakaoCategoryPage(code, { location: ll, radius: rad, sort: SB.DISTANCE, size: 15, page: pg }).catch(function () { return { data: [], last: true }; });
+            add(cr.data);
+            if (cr.last) break;
+          }
+          if (rows.length) break;
+        }
+      } else if (c) {
+        // 가게 이름(빽다방·메가커피…): 가까운 지점 먼저, 그다음 정확도 순
+        var ll2 = new kakao.maps.LatLng(c.lat, c.lng);
+        var near1 = await kakaoSearch(q, { size: 15, location: ll2, radius: 20000, sort: SB.DISTANCE, page: 1 }).catch(function () { return []; });
+        add(near1);
+        if (near1.length >= 15) add(await kakaoSearch(q, { size: 15, location: ll2, radius: 20000, sort: SB.DISTANCE, page: 2 }).catch(function () { return []; }));
+        add(await kakaoSearch(q, { size: 15, location: ll2, sort: SB.ACCURACY }).catch(function () { return []; }));
+      } else {
+        add(await kakaoSearch(q, { size: 15 }).catch(function () { return []; }));
+      }
+      var out = rows.map(function (x) {
+        var s = kakaoToShop(x), parts = String(x.category_name || '').split(' > '), cat = (parts.length >= 4 ? parts[parts.length - 2] : parts[parts.length - 1]) || '장소';
         var v = shopView(s); v.badge = cat; v.ph = '📍';
-        return { cat: '생활', badge: '📍 ' + cat, color: '#2a7de1', item: { name: s.n, address: s.a }, view: v };
+        var d = Number(x.distance), dtxt = x.distance !== '' && x.distance != null && isFinite(d) ? (d >= 1000 ? (d / 1000).toFixed(1) + 'km' : Math.round(d) + 'm') + ' · ' : '';
+        return { cat: '생활', badge: '📍 ' + cat, color: '#2a7de1', item: { name: s.n, address: dtxt + s.a }, view: v };
       });
+      out.byCat = !!code;
+      return out;
     })();
     try {
       var j = await api('mapsearch?q=' + encodeURIComponent(q));
@@ -6390,10 +6414,11 @@
     if (seq !== msSeq) return;
     // 이미 나온 곳(이름이 같고 200m 안)은 생활 결과에서 뺀다
     var all = local.concat(more);
+    var lifeByCat = life.byCat;
     life = life.filter(function (x) {
       return !all.some(function (y) { var v = y.view, it = y.item || {}; var la = v ? v.lat : Number(it.mapY || it.lat), lo = v ? v.lng : Number(it.mapX || it.lng); return msNorm(it.name) === msNorm(x.item.name) && la && Math.abs(la - x.view.lat) < 0.002 && Math.abs(lo - x.view.lng) < 0.0025; });
     });
-    renderMapResults(all.concat(life), false);
+    renderMapResults(lifeByCat ? life.concat(all) : all.concat(life), false);
   }
   $('map-q').addEventListener('input', function () {
     var q = this.value.trim();
@@ -9322,6 +9347,22 @@
   function kakaoPlaces() {
     return loadNaver().catch(function () {}).then(function () {
       return window.kakao && kakao.maps && kakao.maps.services ? new kakao.maps.services.Places() : null;
+    });
+  }
+  // 카페·편의점처럼 업종을 치면 이름 글자 맞추기 대신 카카오의 "업종별 주변 검색"(가까운 순)을 쓴다
+  var CAT_CODE = { 카페: 'CE7', 커피: 'CE7', 커피숍: 'CE7', 커피전문점: 'CE7', 편의점: 'CS2', 약국: 'PM9', 주유소: 'OL7', 충전소: 'OL7', 주차장: 'PK6', 마트: 'MT1', 대형마트: 'MT1', 은행: 'BK9', 병원: 'HP8', 음식점: 'FD6', 식당: 'FD6', 숙박: 'AD5', 숙소: 'AD5', 호텔: 'AD5', 지하철: 'SW8', 지하철역: 'SW8' };
+  function catCodeOf(q) {
+    var k = String(q || '').replace(/\s+/g, '').replace(/^(내주변|근처|주변|가까운)/, '').replace(/(내주변|근처|주변)$/, '');
+    return CAT_CODE[k] || null;
+  }
+  function kakaoCategoryPage(code, opt) {
+    return kakaoPlaces().then(function (P) {
+      if (!P) return { data: [], last: true };
+      return new Promise(function (resolve) {
+        P.categorySearch(code, function (res, st, pg) {
+          resolve(st === kakao.maps.services.Status.OK ? { data: res, last: !pg || !pg.hasNextPage } : { data: [], last: true });
+        }, opt);
+      });
     });
   }
   function kakaoSearch(q, opt) {
