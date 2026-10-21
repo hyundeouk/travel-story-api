@@ -6082,14 +6082,20 @@
         });
       }
       // 카페: 이름난 커피 프랜차이즈(메가MGC커피·컴포즈커피·빽다방 …)는 가까운 지점을 따로 찾아 꼭 보이게 한다 (빽빽한 동네에서도 빠지지 않게)
-      var brandP = (rad && P.on.CE7) ? Promise.all(CAFE_BRANDS.map(function (b) {
+      var brandP = (rad && P.on.CE7) ? Promise.all(CAFE_BRANDS.map(function (b, bi) {
+        var maxPg = bi < CAFE_BIG ? 3 : 1;
         return new Promise(function (resolve) {
-          try {
-            places.keywordSearch(b, function (res, st) {
-              if (st !== K.services.Status.OK) return resolve([]);
-              resolve(res.filter(function (r) { return /카페|커피/.test(r.category_name || '') && !isThemeCafe(r) && distKm(rad.lat, rad.lng, Number(r.y), Number(r.x)) <= rad.m / 1000; }).slice(0, 3));
-            }, { location: new K.LatLng(rad.lat, rad.lng), radius: Math.round(rad.m), sort: K.services.SortBy.DISTANCE, size: 15 });
-          } catch (e) { resolve([]); }
+          var out = [], n = 0;
+          function cb(res, st, pg) {
+            var ok = st === K.services.Status.OK;
+            if (ok) res.forEach(function (r) { out.push(r); });
+            n++;
+            var lastD = ok && res.length ? Number(res[res.length - 1].distance) : 0;
+            if (ok && pg && pg.hasNextPage && n < maxPg && !(lastD > rad.m)) pg.nextPage(); // 거리순이라 반경을 넘으면 더 볼 필요 없다
+            else resolve(out.filter(function (r) { return /카페|커피/.test(r.category_name || '') && !isThemeCafe(r) && distKm(rad.lat, rad.lng, Number(r.y), Number(r.x)) <= rad.m / 1000; }));
+          }
+          try { places.keywordSearch(b, cb, { location: new K.LatLng(rad.lat, rad.lng), radius: Math.round(rad.m), sort: K.services.SortBy.DISTANCE, size: 15 }); }
+          catch (e) { resolve([]); }
         });
       })) : Promise.resolve([]);
       await Promise.all(codes.map(function (code) {
@@ -6393,7 +6399,7 @@
         // 업종 검색: 지도 가운데(없으면 내 위치) 3km 안을 가까운 순으로 최대 45곳. 하나도 없으면 20km까지 넓힌다.
         var ll = new kakao.maps.LatLng(c.lat, c.lng);
         if (code === 'CE7') {
-          var brs = await Promise.all(CAFE_BRANDS.map(function (b) { return kakaoSearch(b, { size: 5, location: ll, radius: 5000, sort: SB.DISTANCE }).catch(function () { return []; }); }));
+          var brs = await Promise.all(CAFE_BRANDS.slice(0, 16).map(function (b) { return kakaoSearch(b, { size: 5, location: ll, radius: 5000, sort: SB.DISTANCE }).catch(function () { return []; }); }));
           var bl = [];
           brs.forEach(function (list, bi) { (list || []).filter(function (x) { return /카페|커피|디저트|제과/.test(x.category_name || ''); }).slice(0, 2).forEach(function (x) { bl.push(x); }); });
           bl.sort(function (a, b) { return Number(a.distance) - Number(b.distance); });
@@ -9378,7 +9384,8 @@
   // 카페·편의점처럼 업종을 치면 이름 글자 맞추기 대신 카카오의 "업종별 주변 검색"(가까운 순)을 쓴다
   var CAT_CODE = { 카페: 'CE7', 커피: 'CE7', 커피숍: 'CE7', 커피전문점: 'CE7', 편의점: 'CS2', 약국: 'PM9', 주유소: 'OL7', 충전소: 'OL7', 주차장: 'PK6', 마트: 'MT1', 대형마트: 'MT1', 은행: 'BK9', 병원: 'HP8', 음식점: 'FD6', 식당: 'FD6', 숙박: 'AD5', 숙소: 'AD5', 호텔: 'AD5', 지하철: 'SW8', 지하철역: 'SW8' };
   // 카페를 찾을 때 가까운 45곳 안에 큰 체인이 빠지지 않게, 이름난 프랜차이즈는 따로 가까운 지점을 더 찾아 맨 위에 보여 준다
-  var CAFE_BRANDS = ['메가MGC커피', '컴포즈커피', '빽다방', '스타벅스', '이디야커피', '투썸플레이스', '할리스', '매머드커피', '더벤티', '파스쿠찌', '커피빈', '폴바셋', '공차', '탐앤탐스', '엔제리너스', '요거프레소', '카페베네', '던킨', '더리터', '커피에반하다'];
+  var CAFE_BRANDS = ['메가MGC커피', '컴포즈커피', '빽다방', '스타벅스', '이디야커피', '투썸플레이스', '할리스', '매머드커피', '더벤티', '파스쿠찌', '커피빈', '폴바셋', '공차', '탐앤탐스', '엔제리너스', '요거프레소', '카페베네', '더리터', '커피에반하다', '드롭탑', '블루보틀', '카페게이트', '커피베이', '토프레소', '달콤커피', '핸즈커피', '빈브라더스', '프롬하루', '카페봄봄', '커피나무'];
+  var CAFE_BIG = 9; // 앞의 9개(메가·컴포즈·빽다방·스타벅스·이디야·투썸·할리스·매머드·더벤티)는 지점이 많아 3쪽(가까운 45곳)까지 찾는다
   // 카페 검색·단추에서는 커피를 파는 곳만: 키즈카페·보드게임카페·만화카페·애견/고양이카페·룸카페 같은 체험형은 뺀다
   function isThemeCafe(r) {
     var c = String(r.category_name || ''), n = String(r.place_name || '');
