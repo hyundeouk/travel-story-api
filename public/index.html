@@ -141,6 +141,9 @@
     top: env(safe-area-inset-top, 0px);
     background: var(--bg);
     padding-block: 14px 10px;
+    /* 메뉴 줄은 화면 좌우 끝까지 꽉 차게 (본문은 양옆 16px 여백 그대로) */
+    margin-inline: -16px;
+    padding-inline: 16px;
     z-index: 5;
   }
   .brand { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
