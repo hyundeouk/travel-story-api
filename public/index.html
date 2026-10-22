@@ -6759,6 +6759,19 @@
       P.flakes = []; if (kd === 'snow') { for (i = 0; i < (hv ? 220 : 130); i++) P.flakes.push({ x: Math.random() * W, y: Math.random() * H, r: (1.6 + Math.random() * 3) * (P.dpr || 1), v: (40 + Math.random() * 70) * (P.dpr || 1), ph: Math.random() * 6.28 }); }
     }
 
+    // 해·달이 가장 높이 뜰 때의 높이 = 메인 메뉴(탭 줄) 세로 중앙 (화면 좌표 × dpr)
+    var _pk = { t: 0, v: 0 };
+    function peakY() {
+      var now = Date.now();
+      if (now - _pk.t > 400) {
+        _pk.t = now;
+        var el = document.querySelector('header.top nav.segmented'), v = 100;
+        if (el) { var r = el.getBoundingClientRect(); if (r.height > 0) v = r.top + r.height / 2; }
+        _pk.v = v * (P.dpr || 1);
+      }
+      return _pk.v;
+    }
+
     // ---- 그리기
     function draw(dt, animate) {
       if (!ctx) return;
@@ -6767,7 +6780,7 @@
       var kd = kind(), s = suns(), h = cur.h, i, p;
       // 해 / 달
       if (cur.day && (kd === 'clear' || kd === 'partly' || kd === 'cloudy')) {
-        var u = clamp((h - s.sr) / (s.ss - s.sr), 0, 1), sx = W * (0.12 + 0.76 * u), sy = H * (0.47 - 0.18 * Math.sin(Math.PI * u));
+        var u = clamp((h - s.sr) / (s.ss - s.sr), 0, 1), sx = W * (0.12 + 0.76 * u), sy = H * 0.5 - (H * 0.5 - peakY()) * Math.sin(Math.PI * u); // 한낮에는 메인 메뉴 줄 높이에 뜬다
         var low = Math.pow(1 - Math.sin(Math.PI * u), 2); // 해가 낮게 떠 있을수록 주황빛
         var warm = mix([255, 224, 60], [255, 140, 40], low), core = mix([255, 214, 0], [255, 120, 20], low);
         var R = Math.min(W, H) * 0.55, ga = kd === 'clear' ? 1 : kd === 'partly' ? 0.95 : 0.22;
@@ -6783,7 +6796,7 @@
         }
       } else if (!cur.day && (kd === 'clear' || kd === 'partly')) {
         var span = 24 - s.ss + s.sr, hh = h >= s.ss ? h - s.ss : h + 24 - s.ss, mu = clamp(hh / span, 0, 1);
-        var mx = W * (0.15 + 0.7 * mu), my = H * (0.46 - 0.18 * Math.sin(Math.PI * mu)), ms = clamp(Math.min(window.innerWidth, window.innerHeight) / 9, 40, 80) / 44 * (P.dpr || 1);
+        var mx = W * (0.15 + 0.7 * mu), my = H * 0.5 - (H * 0.5 - peakY()) * Math.sin(Math.PI * mu), ms = clamp(Math.min(window.innerWidth, window.innerHeight) / 9, 40, 80) / 44 * (P.dpr || 1);
         ctx.globalAlpha = kd === 'clear' ? 1 : 0.7;
         ctx.drawImage(moonSprite(96 * ms), mx - 48 * ms, my - 48 * ms, 96 * ms, 96 * ms);
         ctx.globalAlpha = 1;
