@@ -983,10 +983,11 @@
   .sky-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink-dim); font-size: 0.7rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; cursor: pointer; white-space: nowrap; flex: none; }
   #sky-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; transition: background 1.2s linear; }
   #sky-bg canvas { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; display: block; }
-  .sky-veil { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(var(--bg-rgb), calc(0.12 * var(--vk, 1))) 0%, rgba(var(--bg-rgb), calc(0.34 * var(--vk, 1))) 40%, rgba(var(--bg-rgb), calc(0.5 * var(--vk, 1))) 100%); }
+  .sky-veil { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(var(--bg-rgb), calc(0.04 * var(--vk, 1))) 0%, rgba(var(--bg-rgb), calc(0.2 * var(--vk, 1))) 40%, rgba(var(--bg-rgb), calc(0.36 * var(--vk, 1))) 100%); }
   html.sky-on { background: var(--bg); }
   html.sky-on body { background: transparent; }
-  html.sky-on header.top { background: rgba(var(--bg-rgb), 0.66); }
+  html.sky-on header.top { background: rgba(var(--bg-rgb), calc(0.42 * var(--vk, 1))); }
+  html.sky-on .sky-line #sky-txt { color: var(--ink); text-shadow: 0 0 6px rgba(var(--bg-rgb), 0.9), 0 0 2px rgba(var(--bg-rgb), 0.9); }
   @media print { #sky-bg { display: none !important; } html.sky-on, html.sky-on body { background: #fff !important; } }
 </style>
 </head>
@@ -6625,8 +6626,8 @@
       return { sr: 6.4 + 1.2 * Math.cos(a), ss: 18.3 - 1.0 * Math.cos(a) };
     }
     var PAL = {
-      night: [[11, 16, 38], [28, 42, 74]], dawn: [[59, 63, 115], [242, 165, 160]], morning: [[90, 160, 216], [255, 217, 168]],
-      day: [[47, 127, 214], [159, 211, 245]], golden: [[74, 143, 208], [255, 208, 138]], sunset: [[74, 63, 122], [255, 138, 92]], dusk: [[29, 35, 80], [138, 90, 154]]
+      night: [[11, 16, 38], [28, 42, 74]], dawn: [[59, 63, 115], [242, 165, 160]], morning: [[66, 150, 235], [255, 214, 150]],
+      day: [[22, 112, 232], [118, 196, 252]], golden: [[50, 134, 226], [255, 206, 120]], sunset: [[74, 63, 122], [255, 138, 92]], dusk: [[29, 35, 80], [138, 90, 154]]
     };
     function timeColors(h) {
       var s = suns();
@@ -6651,7 +6652,7 @@
       return 'clear';
     }
     function heavy(c) { return c === 65 || c === 67 || c === 82 || c === 75 || c === 86 || c >= 95; }
-    var GRAY = { clear: 0, partly: 0.15, cloudy: 0.5, fog: 0.55, rain: 0.6, snow: 0.4, storm: 0.75 };
+    var GRAY = { clear: 0, partly: 0.04, cloudy: 0.72, fog: 0.6, rain: 0.82, snow: 0.5, storm: 0.9 };
     var WTXT = { 0: '맑음', 1: '대체로 맑음', 2: '구름 조금', 3: '흐림', 45: '안개', 48: '안개', 51: '이슬비', 53: '이슬비', 55: '이슬비', 56: '언 이슬비', 57: '언 이슬비', 61: '비', 63: '비', 65: '강한 비', 66: '얼어붙는 비', 67: '얼어붙는 비', 71: '눈', 73: '눈', 75: '폭설', 77: '싸락눈', 80: '소나기', 81: '소나기', 82: '강한 소나기', 85: '눈 소나기', 86: '눈 소나기', 95: '뇌우', 96: '뇌우', 99: '뇌우' };
     function kind() { return kindOf(wx ? wx.code : null); }
     function icon(k, day) {
@@ -6670,9 +6671,11 @@
       var s = suns(), code = wx ? wx.code : null, kd = kind();
       function adj(c) {
         var l = lum(c), gr = [l, l, l];
-        if (kd === 'storm') gr = [l * 0.7, l * 0.72, l * 0.8];
-        else if (kd === 'fog' || kd === 'snow') gr = [l + 22, l + 24, l + 28];
-        else if (kd === 'rain') gr = [l * 0.92, l * 0.96, l * 1.02];
+        if (kd === 'storm') gr = [l * 0.42, l * 0.45, l * 0.55];       // 뇌우: 아주 어두운 하늘
+        else if (kd === 'rain') gr = [l * 0.58, l * 0.62, l * 0.72];   // 비: 어두운 푸른 회색
+        else if (kd === 'fog') gr = [l + 50, l + 52, l + 56];
+        else if (kd === 'snow') gr = [l + 40, l + 46, l + 56];         // 눈: 밝은 회청색
+        else if (kd === 'cloudy') gr = [l + 52, l + 56, l + 62];       // 흐림(해가 안 보임): 회색
         return mix(c, gr, g);
       }
       cur = { top: adj(tc[0]), bot: adj(tc[1]), h: k.h, day: k.h > s.sr && k.h < s.ss ? 1 : 0, dark: clamp((70 - lum(tc[0])) / 50, 0, 1), code: code };
@@ -6685,11 +6688,11 @@
         var bgc = (getComputedStyle(document.documentElement).getPropertyValue('--bg-rgb') || '').split(',').map(Number);
         if (bgc.length === 3 && bgc.every(isFinite)) {
           var skyl = lum(mix(cur.top, cur.bot, 0.5)), bgl = lum(bgc);
-          if (bgl > 128 && skyl < 125) vk = 1 + (125 - skyl) / 125 * 1.3;
+          if (bgl > 128 && skyl < 125) vk = 1 + (125 - skyl) / 125 * 0.7;
           else if (bgl <= 128 && skyl > 150) vk = 1 + (skyl - 150) / 100 * 1.2;
         }
       } catch (_) {}
-      root.style.setProperty('--vk', vk.toFixed(2));
+      document.documentElement.style.setProperty('--vk', vk.toFixed(2));
       root.style.background = 'linear-gradient(180deg,' + rgb(cur.top) + ' 0%,' + rgb(mix(cur.top, cur.bot, 0.55)) + ' 55%,' + rgb(cur.bot) + ' 100%)';
     }
 
@@ -6701,19 +6704,29 @@
       if (sprites[key]) return sprites[key];
       var o = document.createElement('canvas'); o.width = Math.round(320 * q); o.height = Math.round(140 * q);
       var x = o.getContext('2d'); x.scale(q, q);
-      [[70, 90, 52], [125, 70, 62], [190, 74, 66], [245, 92, 48], [160, 96, 70]].forEach(function (p) {
+      // 선명한 뭉게구름: 단단한 둥근 덩어리 여러 개 + 아래쪽 그림자 + 위쪽 밝은 빛 + 납작한 밑면
+      [[58, 92, 32], [100, 74, 44], [152, 60, 52], [208, 74, 44], [256, 92, 34], [128, 94, 38], [186, 96, 38]].forEach(function (p) {
         var g = x.createRadialGradient(p[0], p[1], 0, p[0], p[1], p[2]);
-        g.addColorStop(0, rgb(c, 0.95)); g.addColorStop(0.55, rgb(c, 0.6)); g.addColorStop(1, rgb(c, 0));
+        g.addColorStop(0, rgb(c, 1)); g.addColorStop(0.86, rgb(c, 1)); g.addColorStop(1, rgb(c, 0));
         x.fillStyle = g; x.beginPath(); x.arc(p[0], p[1], p[2], 0, 6.2832); x.fill();
       });
+      x.globalCompositeOperation = 'source-atop';
+      var shade = x.createLinearGradient(0, 40, 0, 112);
+      shade.addColorStop(0, 'rgba(255,255,255,0.32)'); shade.addColorStop(0.45, 'rgba(255,255,255,0)'); shade.addColorStop(1, rgb(mix(c, [88, 104, 132], 0.5), 0.55));
+      x.fillStyle = shade; x.fillRect(0, 0, 320, 140);
+      x.globalCompositeOperation = 'destination-out';
+      var cut = x.createLinearGradient(0, 108, 0, 122);
+      cut.addColorStop(0, 'rgba(0,0,0,0)'); cut.addColorStop(1, 'rgba(0,0,0,1)');
+      x.fillStyle = cut; x.fillRect(0, 108, 320, 32);
+      x.globalCompositeOperation = 'source-over';
       var keys = Object.keys(sprites); if (keys.length > 8) delete sprites[keys[0]];
       sprites[key] = o;
       return o;
     }
     function cloudRGB() {
-      var base = { clear: [250, 250, 252], partly: [250, 250, 252], cloudy: [244, 245, 248], snow: [246, 248, 252], rain: [185, 193, 204], storm: [110, 118, 132], fog: [220, 224, 228] }[kind()];
+      var base = { clear: [255, 255, 255], partly: [255, 255, 255], cloudy: [214, 217, 223], snow: [236, 240, 246], rain: [112, 121, 136], storm: [64, 70, 84], fog: [226, 229, 233] }[kind()];
       var c = mix(base, [40, 48, 72], (cur.dark || 0) * 0.75);
-      return mix(c, cur.bot, 0.18);
+      return mix(c, cur.bot, kind() === 'clear' || kind() === 'partly' ? 0.06 : 0.14);
     }
     function moonSprite(px) {
       var sz = Math.max(96, Math.round(px)), mk = 'moon' + sz;
@@ -6737,12 +6750,13 @@
     function setupParts() {
       if (!W) return;
       var kd = kind(), hv = heavy(wx ? wx.code : null), sc = clamp(window.innerWidth / 700, 0.55, 1.3) * (P.dpr || 1);
-      var nc = { clear: 2, partly: 6, cloudy: 10, rain: 10, snow: 9, storm: 11, fog: 4 }[kd];
-      P.clouds = []; for (var i = 0; i < nc; i++) { var s = 0.6 + Math.random() * 0.9; P.clouds.push({ x: Math.random() * 1.4 - 0.2, y: 0.03 + Math.random() * 0.4, s: s, v: 0.004 + Math.random() * 0.008, a: kd === 'clear' ? 0.45 : 0.55 + Math.random() * 0.35 }); }
+      var nc = { clear: 3, partly: 7, cloudy: 15, rain: 15, snow: 12, storm: 16, fog: 4 }[kd];
+      var cover = kd === 'cloudy' || kd === 'rain' || kd === 'storm' || kd === 'snow'; // 하늘을 덮는 구름
+      P.clouds = []; for (var i = 0; i < nc; i++) { var s = cover ? 1 + Math.random() * 1.1 : 0.55 + Math.random() * 0.8; P.clouds.push({ x: Math.random() * 1.5 - 0.25, y: cover ? -0.02 + Math.random() * 0.36 : 0.05 + Math.random() * 0.4, s: s, v: (cover ? 0.007 : 0.005) + Math.random() * 0.01, a: cover ? 0.82 + Math.random() * 0.18 : 0.88 + Math.random() * 0.12 }); }
       P.sc = sc; // 구름 크기 기준(화면 폭 기준, CSS 픽셀) — 캔버스 점 수에 맞춰 곱해 쓴다
       P.stars = []; for (i = 0; i < 90; i++) P.stars.push({ x: Math.random() * W, y: Math.random() * H * 0.6, r: (0.5 + Math.random() * 1.1) * (P.dpr || 1), ph: Math.random() * 6.28 });
-      P.drops = []; if (kd === 'rain' || kd === 'storm') { var nd = hv ? 150 : 80; for (i = 0; i < nd; i++) P.drops.push({ x: Math.random() * W, y: Math.random() * H, l: (10 + Math.random() * 14) * (P.dpr || 1), v: (700 + Math.random() * 400) * (P.dpr || 1) }); }
-      P.flakes = []; if (kd === 'snow') { for (i = 0; i < (hv ? 120 : 70); i++) P.flakes.push({ x: Math.random() * W, y: Math.random() * H, r: (1 + Math.random() * 2.4) * (P.dpr || 1), v: (25 + Math.random() * 40) * (P.dpr || 1), ph: Math.random() * 6.28 }); }
+      P.drops = []; if (kd === 'rain' || kd === 'storm') { var nd = hv ? 300 : 170; for (i = 0; i < nd; i++) P.drops.push({ x: Math.random() * W, y: Math.random() * H, l: (16 + Math.random() * 20) * (P.dpr || 1), v: (850 + Math.random() * 500) * (P.dpr || 1) }); }
+      P.flakes = []; if (kd === 'snow') { for (i = 0; i < (hv ? 220 : 130); i++) P.flakes.push({ x: Math.random() * W, y: Math.random() * H, r: (1.6 + Math.random() * 3) * (P.dpr || 1), v: (40 + Math.random() * 70) * (P.dpr || 1), ph: Math.random() * 6.28 }); }
     }
 
     // ---- 그리기
@@ -6753,16 +6767,23 @@
       var kd = kind(), s = suns(), h = cur.h, i, p;
       // 해 / 달
       if (cur.day && (kd === 'clear' || kd === 'partly' || kd === 'cloudy')) {
-        var u = clamp((h - s.sr) / (s.ss - s.sr), 0, 1), sx = W * (0.12 + 0.76 * u), sy = H * (0.42 - 0.2 * Math.sin(Math.PI * u));
-        var warm = mix([255, 244, 214], [255, 150, 90], Math.pow(1 - Math.sin(Math.PI * u), 2));
-        var R = Math.min(W, H) * 0.5, ga = kd === 'clear' ? 1 : kd === 'partly' ? 0.8 : 0.3;
-        var g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R);
-        g.addColorStop(0, rgb(warm, 0.75 * ga)); g.addColorStop(0.12, rgb(warm, 0.35 * ga)); g.addColorStop(1, rgb(warm, 0));
+        var u = clamp((h - s.sr) / (s.ss - s.sr), 0, 1), sx = W * (0.12 + 0.76 * u), sy = H * (0.47 - 0.18 * Math.sin(Math.PI * u));
+        var low = Math.pow(1 - Math.sin(Math.PI * u), 2); // 해가 낮게 떠 있을수록 주황빛
+        var warm = mix([255, 224, 60], [255, 140, 40], low), core = mix([255, 214, 0], [255, 120, 20], low);
+        var R = Math.min(W, H) * 0.55, ga = kd === 'clear' ? 1 : kd === 'partly' ? 0.95 : 0.22;
+        var pulse = animate ? 1 + 0.04 * Math.sin(T * 0.8) : 1;
+        var g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R * pulse);
+        g.addColorStop(0, rgb(warm, 0.85 * ga)); g.addColorStop(0.1, rgb(warm, 0.5 * ga)); g.addColorStop(0.35, rgb(warm, 0.14 * ga)); g.addColorStop(1, rgb(warm, 0));
         ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-        if (kd !== 'cloudy') { ctx.fillStyle = rgb([255, 252, 240], 0.9 * ga); ctx.beginPath(); ctx.arc(sx, sy, Math.max(10, Math.min(W, H) * 0.028), 0, 6.2832); ctx.fill(); }
+        if (kd !== 'cloudy') {
+          var cr = Math.max(14, Math.min(W, H) * 0.042) * (P.dpr > 1.2 ? 1 : 1);
+          var cg = ctx.createRadialGradient(sx, sy, 0, sx, sy, cr * 1.5);
+          cg.addColorStop(0, rgb(core, 1)); cg.addColorStop(0.66, rgb(core, 1)); cg.addColorStop(1, rgb(core, 0));
+          ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(sx, sy, cr * 1.5, 0, 6.2832); ctx.fill();
+        }
       } else if (!cur.day && (kd === 'clear' || kd === 'partly')) {
         var span = 24 - s.ss + s.sr, hh = h >= s.ss ? h - s.ss : h + 24 - s.ss, mu = clamp(hh / span, 0, 1);
-        var mx = W * (0.15 + 0.7 * mu), my = H * (0.4 - 0.2 * Math.sin(Math.PI * mu)), ms = clamp(Math.min(window.innerWidth, window.innerHeight) / 9, 40, 80) / 44 * (P.dpr || 1);
+        var mx = W * (0.15 + 0.7 * mu), my = H * (0.46 - 0.18 * Math.sin(Math.PI * mu)), ms = clamp(Math.min(window.innerWidth, window.innerHeight) / 9, 40, 80) / 44 * (P.dpr || 1);
         ctx.globalAlpha = kd === 'clear' ? 1 : 0.7;
         ctx.drawImage(moonSprite(96 * ms), mx - 48 * ms, my - 48 * ms, 96 * ms, 96 * ms);
         ctx.globalAlpha = 1;
@@ -6798,7 +6819,7 @@
       }
       // 비
       if (animate && P.drops.length) {
-        ctx.strokeStyle = 'rgba(205,222,245,0.42)'; ctx.lineWidth = 1.1 * (P.dpr || 1); ctx.beginPath();
+        ctx.strokeStyle = 'rgba(214,230,252,0.62)'; ctx.lineWidth = 1.5 * (P.dpr || 1); ctx.lineCap = 'round'; ctx.beginPath();
         for (i = 0; i < P.drops.length; i++) {
           p = P.drops[i]; p.y += p.v * dt; p.x -= p.v * dt * 0.16;
           if (p.y > H) { p.y = -p.l; p.x = Math.random() * (W + 60); }
@@ -6808,7 +6829,7 @@
       }
       // 눈
       if (animate && P.flakes.length) {
-        ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.beginPath();
+        ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.beginPath();
         for (i = 0; i < P.flakes.length; i++) {
           p = P.flakes[i]; p.y += p.v * dt; p.x += Math.sin(T * 0.9 + p.ph) * 14 * (P.dpr || 1) * dt;
           if (p.y > H + 4) { p.y = -4; p.x = Math.random() * W; }
