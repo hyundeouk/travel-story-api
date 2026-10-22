@@ -988,6 +988,11 @@
   html.sky-on body { background: transparent; }
   html.sky-on header.top { background: rgba(var(--bg-rgb), calc(0.42 * var(--vk, 1))); }
   html.sky-on .sky-line #sky-txt { color: var(--ink); text-shadow: 0 0 6px rgba(var(--bg-rgb), 0.9), 0 0 2px rgba(var(--bg-rgb), 0.9); }
+  /* 하늘 위에 바로 올라간 글씨(제목·안내문)는 바탕색 빛무리로 감싸 회색·비 오는 하늘에서도 또렷하게 */
+  html.sky-on header.top h1, html.sky-on .status-line, html.sky-on .copy-hint, html.sky-on .wx-place, html.sky-on .empty-state, html.sky-on .sky-credit {
+    text-shadow: 0 0 8px rgba(var(--bg-rgb), 0.95), 0 0 4px rgba(var(--bg-rgb), 0.95), 0 0 1px rgba(var(--bg-rgb), 1);
+  }
+  html.sky-on .status-line:not(.err), html.sky-on .copy-hint, html.sky-on .empty-state { color: var(--ink); }
   @media print { #sky-bg { display: none !important; } html.sky-on, html.sky-on body { background: #fff !important; } }
 </style>
 </head>
@@ -1533,7 +1538,7 @@
 
   // ---------- 화면 모드 (시스템 / 화이트 / 다크) ----------
   function currentTheme() {
-    var t = document.documentElement.getAttribute('data-theme');
+    var t = document.documentElement.getAttribute('data-auto-dark') || document.documentElement.getAttribute('data-theme');
     return t === 'light' || t === 'dark' ? t : 'system';
   }
   function paintThemeButtons() {
@@ -1547,6 +1552,7 @@
   document.querySelectorAll('[data-theme-set]').forEach(function (b) {
     b.addEventListener('click', function () {
       var t = b.getAttribute('data-theme-set');
+      document.documentElement.removeAttribute('data-auto-dark');
       if (t === 'system') document.documentElement.removeAttribute('data-theme');
       else document.documentElement.setAttribute('data-theme', t);
       try { if (t === 'system') localStorage.removeItem('theme'); else localStorage.setItem('theme', t); } catch (e) {}
@@ -6626,7 +6632,7 @@
       return { sr: 6.4 + 1.2 * Math.cos(a), ss: 18.3 - 1.0 * Math.cos(a) };
     }
     var PAL = {
-      night: [[11, 16, 38], [28, 42, 74]], dawn: [[59, 63, 115], [242, 165, 160]], morning: [[66, 150, 235], [255, 214, 150]],
+      night: [[3, 5, 16], [14, 22, 48]], dawn: [[59, 63, 115], [242, 165, 160]], morning: [[66, 150, 235], [255, 214, 150]],
       day: [[22, 112, 232], [118, 196, 252]], golden: [[50, 134, 226], [255, 206, 120]], sunset: [[74, 63, 122], [255, 138, 92]], dusk: [[29, 35, 80], [138, 90, 154]]
     };
     function timeColors(h) {
@@ -6680,8 +6686,18 @@
       }
       cur = { top: adj(tc[0]), bot: adj(tc[1]), h: k.h, day: k.h > s.sr && k.h < s.ss ? 1 : 0, dark: clamp((70 - lum(tc[0])) / 50, 0, 1), code: code };
     }
+    // 화이트 모드인데 하늘이 거의 검으면(밤) 화면 전체를 다크 모드 색으로 자동 전환 — 글씨가 또렷하고 색도 화려하게
+    function autoDark(skyl) {
+      var de = document.documentElement, orig = de.getAttribute('data-auto-dark');
+      var attr = orig !== null ? orig : (de.getAttribute('data-theme') || 'system');
+      if (attr === 'system') attr = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      var want = attr !== 'dark' && (orig !== null ? skyl < 74 : skyl < 58); // 진짜 밤하늘일 때만 — 흐림·비는 회색 하늘 그대로 두고 화이트 모드 유지
+      if (want && orig === null) { de.setAttribute('data-auto-dark', de.getAttribute('data-theme') || 'system'); de.setAttribute('data-theme', 'dark'); }
+      else if (!want && orig !== null) { de.removeAttribute('data-auto-dark'); if (orig === 'system') de.removeAttribute('data-theme'); else de.setAttribute('data-theme', orig); }
+    }
     function applyBg() {
       if (!root) return;
+      try { autoDark(lum(mix(cur.top, cur.bot, 0.5))); } catch (_) {}
       // 글씨 색과 하늘이 비슷하게 어두우면(화이트 모드의 밤하늘, 다크 모드의 밝은 낮) 바탕색 막을 진하게 해서 글씨를 지킨다
       var vk = 1;
       try {
@@ -6898,6 +6914,7 @@
       compute(); applyBg(); resize(); start();
     }
     function teardown() {
+      try { var de = document.documentElement, o = de.getAttribute('data-auto-dark'); if (o !== null) { de.removeAttribute('data-auto-dark'); if (o === 'system') de.removeAttribute('data-theme'); else de.setAttribute('data-theme', o); } } catch (_) {}
       document.documentElement.classList.remove('sky-on');
       if (root) root.style.display = 'none';
       if (raf) { cancelAnimationFrame(raf); raf = 0; }
