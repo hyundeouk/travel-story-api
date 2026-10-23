@@ -980,6 +980,9 @@
   .sheet-backdrop > .sheet .sheet-head { position: sticky; top: calc(-18px - env(safe-area-inset-top, 0px)); background: var(--bg); padding: 4px 0 10px; z-index: 2; }
   /* 하늘 배경: 날씨·시간대에 맞는 하늘이 앱 바탕에 깔린다. 글씨가 잘 보이게 위에 바탕색 막을 얹는다. */
   .sky-line { display: flex; align-items: center; gap: 10px; margin: -2px 0 10px; font-size: 1.1rem; font-weight: 600; line-height: 1.35; color: var(--ink); min-height: 34px; }
+  .sky-right { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; flex: none; max-width: 70%; }
+  .sky-right .admin-btn { margin-left: 0; font-size: 0.82rem; padding: 5px 12px; }
+  .sky-right .admin-btn { white-space: nowrap; max-width: none; }
   .sky-line #sky-txt { flex: 1; min-width: 0; white-space: normal; word-break: keep-all; }
   .sky-credit { color: inherit; opacity: 0.7; font-size: 0.7rem; font-weight: 500; text-decoration: none; margin-left: 2px; white-space: nowrap; }
   .sky-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink-dim); font-size: 0.82rem; font-weight: 700; padding: 5px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; flex: none; }
@@ -998,6 +1001,7 @@
     text-shadow: 0 0 8px rgba(var(--bg-rgb), 0.95), 0 0 4px rgba(var(--bg-rgb), 0.95), 0 0 1px rgba(var(--bg-rgb), 1);
   }
   html.sky-on .status-line:not(.err), html.sky-on .copy-hint, html.sky-on .empty-state { color: var(--ink); }
+  @media (max-width: 560px) { .sky-line { flex-wrap: wrap; } .sky-line #sky-txt { flex-basis: 100%; } .sky-right { max-width: none; margin-left: auto; } }
   @media print { #sky-bg { display: none !important; } html.sky-on, html.sky-on body { background: #fff !important; } }
 </style>
 </head>
@@ -1012,9 +1016,8 @@
         <button type="button" data-theme-set="light">화이트</button>
         <button type="button" data-theme-set="dark">다크</button>
       </div>
-      <button type="button" class="admin-btn" id="admin-btn" hidden>공유 설정</button>
     </div>
-    <div class="sky-line"><span id="sky-txt"></span><button type="button" id="sky-btn" class="sky-btn"></button></div>
+    <div class="sky-line"><span id="sky-txt"></span><div class="sky-right"><button type="button" class="admin-btn" id="admin-btn" hidden>공유 설정</button><button type="button" id="sky-btn" class="sky-btn"></button></div></div>
     <nav class="segmented" role="tablist">
       <button type="button" class="active" data-view="map" role="tab" aria-selected="true">내 주변 검색</button>
       <button type="button" data-view="mtn" role="tab" aria-selected="false">산</button>
@@ -6812,11 +6815,17 @@
       var o = document.createElement('canvas'); o.width = Math.round(640 * q); o.height = Math.round(150 * q);
       var x = o.getContext('2d'); x.scale(q, q);
       var R = rng(4242), k, i;
-      for (k = 0; k < 8; k++) {
-        var len = 170 + R() * 380, x0 = (640 - len) / 2 + (R() - 0.5) * 50, y0 = 75 + (R() - 0.5) * 70, bend = (R() - 0.5) * 46, w = 1.6 + R() * 4.2, st = Math.max(24, Math.round(len / 4));
+      // 넓게 번지는 옅은 구름 바탕
+      for (k = 0; k < 7; k++) {
+        x.save(); x.translate(110 + R() * 420, 40 + R() * 70); x.rotate(-0.1 + (R() - 0.5) * 0.2); x.scale(5 + R() * 2.5, 1);
+        var hg = x.createRadialGradient(0, 0, 0, 0, 0, 40 + R() * 20); hg.addColorStop(0, rgb(c, 0.1)); hg.addColorStop(1, rgb(c, 0));
+        x.fillStyle = hg; x.beginPath(); x.arc(0, 0, 60, 0, 6.2832); x.fill(); x.restore();
+      }
+      for (k = 0; k < 10; k++) {
+        var len = 170 + R() * 380, x0 = (640 - len) / 2 + (R() - 0.5) * 50, y0 = 75 + (R() - 0.5) * 70, bend = (R() - 0.5) * 46, w = 4.5 + R() * 9, st = Math.max(24, Math.round(len / 4));
         for (i = 0; i <= st; i++) {
           var t = i / st, env = Math.pow(Math.sin(Math.PI * t), 0.8), px = x0 + len * t + (R() - 0.5) * 8, py = y0 + bend * Math.sin(Math.PI * t) + (R() - 0.5) * w * 0.9;
-          var r = w * (0.6 + R() * 0.9) * (0.45 + env), a = (0.03 + R() * 0.05) * env;
+          var r = w * (0.6 + R() * 0.9) * (0.45 + env), a = (0.04 + R() * 0.06) * env;
           x.save(); x.translate(px, py); x.scale(4.2, 1);
           var g = x.createRadialGradient(0, 0, 0, 0, 0, r);
           g.addColorStop(0, rgb(c, a)); g.addColorStop(1, rgb(c, 0));
