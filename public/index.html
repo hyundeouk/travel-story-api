@@ -995,12 +995,14 @@
   html.sky-on body { background: transparent; }
   html.sky-on header.top { background: transparent; transition: background 0.25s; }
   html.sky-on.scrolled header.top { background: rgba(0, 0, 0, 0.88); }
-  html.sky-on .sky-line #sky-txt { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.55), 0 0 10px rgba(0,0,0,0.45); }
-  /* 하늘 위에 바로 올라간 글씨(제목·안내문)는 바탕색 빛무리로 감싸 회색·비 오는 하늘에서도 또렷하게 */
-  html.sky-on header.top h1, html.sky-on .status-line, html.sky-on .copy-hint, html.sky-on .wx-place, html.sky-on .empty-state, html.sky-on .sky-credit {
-    text-shadow: 0 0 8px rgba(var(--bg-rgb), 0.95), 0 0 4px rgba(var(--bg-rgb), 0.95), 0 0 1px rgba(var(--bg-rgb), 1);
-  }
-  html.sky-on .status-line:not(.err), html.sky-on .copy-hint, html.sky-on .empty-state { color: var(--ink); }
+  /* 하늘 위에 바로 올라간 글씨: 하늘이 어두우면 흰색, 밝으면 검정으로 자동 전환(맨 위 줄과 본문 영역을 따로 잰다) */
+  html.sky-on { --th: #fff; --th-dim: rgba(255,255,255,0.8); --th-halo: rgba(0,0,0,0.5); --tc: #fff; --tc-dim: rgba(255,255,255,0.82); --tc-halo: rgba(0,0,0,0.5); }
+  html.sky-on.sky-lt-h { --th: #0a1322; --th-dim: rgba(10,19,34,0.78); --th-halo: rgba(255,255,255,0.6); }
+  html.sky-on.sky-lt-c { --tc: #0a1322; --tc-dim: rgba(10,19,34,0.78); --tc-halo: rgba(255,255,255,0.6); }
+  html.sky-on header.top h1, html.sky-on .sky-line #sky-txt { color: var(--th); text-shadow: 0 0 7px var(--th-halo), 0 1px 2px var(--th-halo); transition: color 0.6s; }
+  html.sky-on .brand span, html.sky-on .sky-credit { color: var(--th-dim); text-shadow: 0 0 6px var(--th-halo); transition: color 0.6s; }
+  html.sky-on .status-line:not(.err), html.sky-on .copy-hint, html.sky-on .wx-place, html.sky-on .empty-state, html.sky-on .empty-state strong { color: var(--tc); text-shadow: 0 0 7px var(--tc-halo), 0 1px 2px var(--tc-halo); transition: color 0.6s; }
+  html.sky-on .status-line.err { text-shadow: 0 0 7px var(--tc-halo); }
   @media (max-width: 560px) { .sky-line { flex-wrap: wrap; } .sky-line #sky-txt { flex-basis: 100%; } .sky-right { max-width: none; margin-left: auto; } }
   @media print { #sky-bg { display: none !important; } html.sky-on, html.sky-on body { background: #fff !important; } }
 </style>
@@ -7011,6 +7013,7 @@
         }
         ctx.fill();
       }
+      sampleText(!animate);
     }
     function loop(ts) {
       raf = 0;
@@ -7019,6 +7022,28 @@
       if (ts - last < ((P.drops && P.drops.length) || (P.flakes && P.flakes.length) ? 50 : 83) || ts - lastScroll < 140) return; // 비·눈 초당 20번, 그 밖엔 12번만 (구름은 느려서 충분), 화면을 밀고 있을 땐 쉬어서 배터리와 부드러움을 지킨다
       var dt = Math.min(0.1, (ts - last) / 1000); last = ts;
       draw(dt, true);
+    }
+    // 하늘 뒤 밝기를 재서 하늘 위 글씨 색(흰색/검정)을 고른다
+    var smCv = null, lastSamp = 0;
+    function sampleText(force) {
+      var now = performance.now();
+      if (!force && now - lastSamp < 1500) return;
+      lastSamp = now;
+      if (!cv || !W || !cur) return;
+      try {
+        if (!smCv) { smCv = document.createElement('canvas'); smCv.width = 12; smCv.height = 24; }
+        var sc = smCv.getContext('2d', { willReadFrequently: true });
+        var gr = sc.createLinearGradient(0, 0, 0, 24);
+        gr.addColorStop(0, rgb(cur.top)); gr.addColorStop(0.55, rgb(mix(cur.top, cur.bot, 0.55))); gr.addColorStop(1, rgb(cur.bot));
+        sc.fillStyle = gr; sc.fillRect(0, 0, 12, 24); sc.drawImage(cv, 0, 0, 12, 24);
+        var d = sc.getImageData(0, 0, 12, 24).data, hs = 0, hn = 0, cs = 0, cn = 0, r, c, o, l;
+        for (r = 0; r < 24; r++) for (c = 0; c < 12; c++) { o = (r * 12 + c) * 4; l = 0.299 * d[o] + 0.587 * d[o + 1] + 0.114 * d[o + 2]; if (r < 4) { hs += l; hn++; } else if (r < 14) { cs += l; cn++; } }
+        var de = document.documentElement;
+        [['sky-lt-h', hs / hn], ['sky-lt-c', cs / cn]].forEach(function (z) {
+          var on = de.classList.contains(z[0]);
+          if (!on && z[1] > 148) de.classList.add(z[0]); else if (on && z[1] < 130) de.classList.remove(z[0]);
+        });
+      } catch (_) {}
     }
     function start() { if (mode === 'on' && !raf && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(loop); } }
     function still() { if (mode !== 'on') draw(0, false); }
@@ -7050,7 +7075,7 @@
     }
     function teardown() {
       try { var de = document.documentElement, o = de.getAttribute('data-auto-dark'); if (o !== null) { de.removeAttribute('data-auto-dark'); if (o === 'system') de.removeAttribute('data-theme'); else de.setAttribute('data-theme', o); } } catch (_) {}
-      document.documentElement.classList.remove('sky-on');
+      document.documentElement.classList.remove('sky-on', 'sky-lt-h', 'sky-lt-c');
       if (root) root.style.display = 'none';
       if (raf) { cancelAnimationFrame(raf); raf = 0; }
     }
