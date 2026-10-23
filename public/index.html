@@ -3677,7 +3677,7 @@
   // 전국 골프장(문화체육관광부). 좌표는 서버가 주소로 찾아 저장해 둔다 — 처음에는 다 찾는 동안 몇 번 더 불러온다.
   state.golfKind = '';
   state.golfQ = '';
-  var golfRetry = 0, golfTimer = null;
+  var golfRetry = 0, golfTimer = null, golfLastPending = -1, golfPaint = 0, golfSig = '';
   $('golf-kind').addEventListener('change', function () { state.golfKind = this.value; renderGolf(); });
   var golfQTimer = null;
   $('golf-q').addEventListener('input', function () {
@@ -3685,12 +3685,21 @@
     clearTimeout(golfQTimer);
     golfQTimer = setTimeout(function () { state.golfQ = v.trim(); renderGolf(); }, 250);
   });
-  async function renderGolf(force) {
+  async function renderGolf(force, silent) {
     var list = $('golf-list');
     var status = $('golf-status');
-    if (!list.children.length || force) list.innerHTML = SKELETON;
+    // 위치를 찾는 중에 저절로 다시 불러올 때(silent)는 목록을 지우거나 로딩 막대를 보이지 않고, 새 자료가 오면 그때 바꾼다
+    if (!list.children.length || (force && !silent)) list.innerHTML = SKELETON;
+    var prevPending = golfLastPending;
     var entry = await loadItems('골프장', force);
     if (state.view !== 'golf') return;
+    if (silent && entry.status === 'ready' && entry.pending === prevPending && list.querySelector('.place-card')) {
+      // 달라진 게 없으면 그대로 둔다
+      clearTimeout(golfTimer);
+      if (entry.pending && golfRetry < 15) { golfRetry++; golfTimer = setTimeout(function () { if (state.view === 'golf') renderGolf(true, true); else golfRetry = 0; }, 6000); }
+      return;
+    }
+    golfLastPending = entry.pending;
     if (entry.status === 'error') {
       showError(status, list, function () { renderGolf(true); });
       if (entry.apply && entry.apply.length) {
@@ -3706,6 +3715,9 @@
       if (q && String(g.name).replace(/\s+/g, '').toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
+    var gsig = [state.golfKind, state.golfQ, state.area, entry.items.length, entry.pending, items.length].join('|');
+    if (gsig === golfSig && list.querySelector('.place-card') && !force) return; // 같은 조건으로 다시 들어오면 이미 그린 카드를 그대로 쓴다
+    golfSig = gsig;
     status.hidden = false;
     status.className = 'status-line';
     status.textContent = '자료: ' + srcLabel('golf') + ' · ' + items.length + '곳' + (items.length !== entry.items.length ? ' (전국 ' + entry.items.length + '곳)' : '') +
@@ -3714,13 +3726,21 @@
     if (!items.length) {
       list.appendChild(el('<div class="empty-state"><strong>표시할 골프장이 없어요</strong>지역·구분·이름을 바꿔 다시 찾아보세요.</div>'));
     } else {
-      items.forEach(function (g) { list.appendChild(placeCard('골프장', g)); });
+      // 카드를 한꺼번에 수백 개 만들면 화면이 멈칫하므로 처음 24개를 먼저 보여 주고 나머지는 틈틈이 이어 붙인다
+      var tok = ++golfPaint, at = 0;
+      (function chunk(n) {
+        if (tok !== golfPaint) return;
+        var frag = document.createDocumentFragment(), end = Math.min(items.length, at + n);
+        for (; at < end; at++) frag.appendChild(placeCard('골프장', items[at]));
+        list.appendChild(frag);
+        if (at < items.length) setTimeout(function () { chunk(60); }, 30);
+      })(24);
     }
     // 좌표를 다 찾을 때까지 잠시 뒤 다시 불러온다 (최대 15번)
     clearTimeout(golfTimer);
     if (entry.pending && golfRetry < 15) {
       golfRetry++;
-      golfTimer = setTimeout(function () { if (state.view === 'golf') renderGolf(true); else golfRetry = 0; }, 4000);
+      golfTimer = setTimeout(function () { if (state.view === 'golf') renderGolf(true, true); else golfRetry = 0; }, 6000);
     } else if (!entry.pending) golfRetry = 0;
     golfGeocode(entry.items);
   }
@@ -6810,6 +6830,7 @@
     }
 
     // 해·달이 가장 높이 뜰 때의 높이 = 메인 메뉴(탭 줄) 세로 중앙 (화면 좌표 × dpr)
+    var sunCv = null, sunKey = '';
     var _pk = { t: 0, v: 0 };
     function peakY() {
       var now = Date.now();
@@ -6836,25 +6857,34 @@
         var warm = mix([232, 240, 252], [255, 150, 60], low), hot = mix([255, 252, 240], [255, 214, 150], low);
         var M = Math.min(W, H), R = M * 0.8, ga = kd === 'clear' ? 1 : kd === 'partly' ? 0.95 : 0.22;
         var pulse = animate ? 1 + 0.02 * Math.sin(T * 0.7) : 1;
-        ctx.save(); ctx.globalCompositeOperation = 'lighter';
-        var g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R * pulse); // 넓게 번지는 빛
+        // 해 주변의 부드러운 빛(번짐·햇무리·렌즈 번짐)은 움직이지 않으므로 반 해상도로 한 번만 그려 두고 매 프레임 붙이기만 한다 — 아이패드에서 훨씬 가볍다
+        var skey = [Math.round(sx / 4), Math.round(sy / 4), kd, Math.round(low * 20), W, H].join('|');
+        if (skey !== sunKey || !sunCv) {
+          sunKey = skey;
+          if (!sunCv) sunCv = document.createElement('canvas');
+          sunCv.width = Math.ceil(W / 2); sunCv.height = Math.ceil(H / 2);
+          var x = sunCv.getContext('2d'); x.setTransform(0.5, 0, 0, 0.5, 0, 0);
+        x.save(); x.globalCompositeOperation = 'lighter';
+        var g = x.createRadialGradient(sx, sy, 0, sx, sy, R); // 넓게 번지는 빛
         g.addColorStop(0, rgb(warm, 0.62 * ga)); g.addColorStop(0.07, rgb(warm, 0.4 * ga)); g.addColorStop(0.3, rgb(warm, 0.13 * ga)); g.addColorStop(1, rgb(warm, 0));
-        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        x.fillStyle = g; x.fillRect(0, 0, W, H);
         if (kd !== 'cloudy') {
-          var rh = M * 0.6, gh = ctx.createRadialGradient(sx, sy, rh * 0.82, sx, sy, rh * 1.08); // 햇무리(희미한 무지개 고리)
+          var rh = M * 0.6, gh = x.createRadialGradient(sx, sy, rh * 0.82, sx, sy, rh * 1.08); // 햇무리(희미한 무지개 고리)
           gh.addColorStop(0, 'rgba(255,255,255,0)'); gh.addColorStop(0.22, 'rgba(255,140,120,' + (0.06 * ga) + ')'); gh.addColorStop(0.42, 'rgba(255,230,140,' + (0.07 * ga) + ')'); gh.addColorStop(0.62, 'rgba(140,220,200,' + (0.06 * ga) + ')'); gh.addColorStop(0.82, 'rgba(120,160,255,' + (0.07 * ga) + ')'); gh.addColorStop(1, 'rgba(120,160,255,0)');
-          ctx.fillStyle = gh; ctx.fillRect(0, 0, W, H);
+          x.fillStyle = gh; x.fillRect(0, 0, W, H);
           var dx = W * 0.5 - sx, dy = H * 0.5 - sy, GH = [[0.45, 0.034, 0.1], [0.9, 0.05, 0.075], [1.35, 0.026, 0.09], [1.8, 0.04, 0.07], [2.3, 0.058, 0.06]]; // 렌즈 번짐
           GH.forEach(function (q) {
-            var gx = sx + dx * q[0], gy = sy + dy * q[0], gr = M * q[1], gg = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
+            var gx = sx + dx * q[0], gy = sy + dy * q[0], gr = M * q[1], gg = x.createRadialGradient(gx, gy, 0, gx, gy, gr);
             gg.addColorStop(0, 'rgba(235,244,255,' + (q[2] * 0.7 * ga) + ')'); gg.addColorStop(0.85, 'rgba(235,244,255,' + (q[2] * ga) + ')'); gg.addColorStop(1, 'rgba(235,244,255,0)');
-            ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(gx, gy, gr, 0, 6.2832); ctx.fill();
+            x.fillStyle = gg; x.beginPath(); x.arc(gx, gy, gr, 0, 6.2832); x.fill();
           });
-          var r2 = M * 0.2 * pulse, g2 = ctx.createRadialGradient(sx, sy, 0, sx, sy, r2); // 해 가까운 하얀 빛
+          var r2 = M * 0.2, g2 = x.createRadialGradient(sx, sy, 0, sx, sy, r2); // 해 가까운 하얀 빛
           g2.addColorStop(0, rgb(hot, 0.95)); g2.addColorStop(0.2, rgb(hot, 0.5)); g2.addColorStop(1, rgb(hot, 0));
-          ctx.fillStyle = g2; ctx.fillRect(sx - r2, sy - r2, r2 * 2, r2 * 2);
+          x.fillStyle = g2; x.fillRect(sx - r2, sy - r2, r2 * 2, r2 * 2);
         }
-        ctx.restore();
+          x.restore();
+        }
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(sunCv, 0, 0, W, H); ctx.restore();
         if (kd !== 'cloudy') {
           var cr = Math.max(9, M * 0.026), cg = ctx.createRadialGradient(sx, sy, 0, sx, sy, cr * 2.2); // 작고 하얀 중심
           cg.addColorStop(0, 'rgba(255,255,255,1)'); cg.addColorStop(0.45, 'rgba(255,255,252,1)'); cg.addColorStop(0.7, rgb(hot, 0.5)); cg.addColorStop(1, rgb(hot, 0));
@@ -6930,7 +6960,7 @@
       raf = 0;
       if (document.hidden || mode !== 'on' || !ctx) return;
       raf = requestAnimationFrame(loop);
-      if (ts - last < 50 || ts - lastScroll < 140) return; // 초당 20번만, 화면을 밀고 있을 땐 쉬어서 배터리와 부드러움을 지킨다
+      if (ts - last < ((P.drops && P.drops.length) || (P.flakes && P.flakes.length) ? 50 : 83) || ts - lastScroll < 140) return; // 비·눈 초당 20번, 그 밖엔 12번만 (구름은 느려서 충분), 화면을 밀고 있을 땐 쉬어서 배터리와 부드러움을 지킨다
       var dt = Math.min(0.1, (ts - last) / 1000); last = ts;
       draw(dt, true);
     }
@@ -6940,9 +6970,9 @@
     // ---- 화면 만들기 / 크기
     function resize() {
       if (!cv) return;
-      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var dpr = Math.min(window.devicePixelRatio || 1, 1.6);
       var area = window.innerWidth * window.innerHeight * dpr * dpr;
-      if (area > 3.4e6) dpr *= Math.sqrt(3.4e6 / area); // 아이패드·큰 화면은 점 수를 제한해 버벅이지 않게
+      if (area > 2.4e6) dpr *= Math.sqrt(2.4e6 / area); // 아이패드·큰 화면은 점 수를 제한해 버벅이지 않게
       P.dpr = dpr; sprites = {};
       W = Math.round(window.innerWidth * dpr); H = Math.round(window.innerHeight * dpr);
       cv.width = W; cv.height = H;
