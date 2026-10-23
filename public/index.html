@@ -6815,14 +6815,15 @@
       var o = document.createElement('canvas'); o.width = Math.round(640 * q); o.height = Math.round(150 * q);
       var x = o.getContext('2d'); x.scale(q, q);
       var R = rng(4242), k, i;
-      // 넓게 번지는 옅은 구름 바탕
-      for (k = 0; k < 7; k++) {
-        x.save(); x.translate(110 + R() * 420, 40 + R() * 70); x.rotate(-0.1 + (R() - 0.5) * 0.2); x.scale(5 + R() * 2.5, 1);
-        var hg = x.createRadialGradient(0, 0, 0, 0, 0, 40 + R() * 20); hg.addColorStop(0, rgb(c, 0.1)); hg.addColorStop(1, rgb(c, 0));
-        x.fillStyle = hg; x.beginPath(); x.arc(0, 0, 60, 0, 6.2832); x.fill(); x.restore();
+      // 넓게 번지는 옅은 구름 바탕 (그림 밖으로 잘리면 세로선처럼 보이므로 가장자리에서 완전히 사라지는 크기만 쓴다)
+      for (k = 0; k < 6; k++) {
+        var hr = 36 + R() * 12;
+        x.save(); x.translate(250 + R() * 140, 75 + (R() - 0.5) * 24); x.rotate(-0.08 + (R() - 0.5) * 0.16); x.scale(3.2 + R() * 1.4, 1);
+        var hg = x.createRadialGradient(0, 0, 0, 0, 0, hr); hg.addColorStop(0, rgb(c, 0.1)); hg.addColorStop(1, rgb(c, 0));
+        x.fillStyle = hg; x.beginPath(); x.arc(0, 0, hr, 0, 6.2832); x.fill(); x.restore();
       }
       for (k = 0; k < 10; k++) {
-        var len = 170 + R() * 380, x0 = (640 - len) / 2 + (R() - 0.5) * 50, y0 = 75 + (R() - 0.5) * 70, bend = (R() - 0.5) * 46, w = 4.5 + R() * 9, st = Math.max(24, Math.round(len / 4));
+        var len = 170 + R() * 380, x0 = (640 - len) / 2 + (R() - 0.5) * 50, y0 = 75 + (R() - 0.5) * 50, bend = (R() - 0.5) * 36, w = 4.5 + R() * 6, st = Math.max(24, Math.round(len / 4));
         for (i = 0; i <= st; i++) {
           var t = i / st, env = Math.pow(Math.sin(Math.PI * t), 0.8), px = x0 + len * t + (R() - 0.5) * 8, py = y0 + bend * Math.sin(Math.PI * t) + (R() - 0.5) * w * 0.9;
           var r = w * (0.6 + R() * 0.9) * (0.45 + env), a = (0.04 + R() * 0.06) * env;
