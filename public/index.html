@@ -6711,6 +6711,9 @@
         return dm ? [o[0] * dm, o[1] * dm, o[2] * dm] : o; // 흐린 날 하늘은 회색으로 뜨지 않고 검은 바탕에 가깝게
       }
       cur = { top: adj(tc[0]), bot: adj(tc[1]), h: k.h, day: k.h > s.sr && k.h < s.ss ? 1 : 0, dark: clamp((70 - lum(tc[0])) / 50, 0, 1), code: code };
+      // 흐린 날: 애플 날씨처럼 푸른빛 도는 짙은 회청색 바탕 위에 가로로 길게 번진 구름결을 얹는다(밤엔 더 어둡게)
+      var OV = { cloudy: [[44, 52, 66], [68, 78, 96]], fog: [[70, 76, 88], [98, 104, 116]], snow: [[58, 66, 82], [90, 100, 118]], rain: [[30, 36, 48], [50, 58, 74]], storm: [[16, 19, 28], [32, 37, 50]] }[kd];
+      if (OV) { var dk = 1 - 0.62 * cur.dark; cur.top = OV[0].map(function (v) { return v * dk; }); cur.bot = OV[1].map(function (v) { return v * dk; }); }
     }
     // 화이트 모드인데 하늘이 거의 검으면(밤) 화면 전체를 다크 모드 색으로 자동 전환 — 글씨가 또렷하고 색도 화려하게
     function autoDark(skyl) {
@@ -6769,6 +6772,38 @@
       sprites[key] = o;
       return o;
     }
+    function stratusTile(c, dens) {
+      // 하늘 전체에 번지는 가로결 구름(좌우로 이어 붙여도 티가 안 나게 가장자리를 감아서 그린다)
+      var q = clamp((P.dpr || 1) * 0.8, 0.6, 1.4), TW = 900, TH = 500;
+      var key = 'st' + c.map(Math.round).join(',') + '@' + q.toFixed(2) + 'd' + dens;
+      if (sprites[key]) return sprites[key];
+      var o = document.createElement('canvas'); o.width = Math.round(TW * q); o.height = Math.round(TH * q);
+      var x = o.getContext('2d'); x.scale(q, q);
+      var R = rng(991), k;
+      function streak(cx, cy, L, th, rot, col, a) {
+        for (var ox = -1; ox <= 1; ox++) for (var oy = -1; oy <= 1; oy++) {
+          var px = cx + ox * TW, py = cy + oy * TH;
+          if (px + L < 0 || px - L > TW || py + L < 0 || py - L > TH) continue;
+          x.save(); x.translate(px, py); x.rotate(rot); x.scale(L / th, 1);
+          var g = x.createRadialGradient(0, 0, 0, 0, 0, th);
+          g.addColorStop(0, rgb(col, a)); g.addColorStop(1, rgb(col, 0));
+          x.fillStyle = g; x.beginPath(); x.arc(0, 0, th, 0, 6.2832); x.fill(); x.restore();
+        }
+      }
+      var DARK = [6, 10, 20];
+      for (k = 0; k < 16; k++) streak(R() * TW, R() * TH, 110 + R() * 120, 70 + R() * 80, R() * 3.14, k % 2 ? c : DARK, (k % 2 ? 0.05 : 0.07) * dens);   // 구름이 짙고 옅은 얼룩
+      for (k = 0; k < 24; k++) streak(R() * TW, R() * TH, 220 + R() * 240, 24 + R() * 30, -0.12 + (R() - 0.5) * 0.3, c, 0.05 * dens);   // 넓고 흐린 띠
+      for (k = 0; k < 150; k++) streak(R() * TW, R() * TH, 90 + R() * 200, 7 + R() * 15, -0.12 + (R() - 0.5) * 0.34, c, 0.045 * dens);   // 중간 결
+      for (k = 0; k < 70; k++) streak(R() * TW, R() * TH, 90 + R() * 210, 8 + R() * 16, -0.12 + (R() - 0.5) * 0.34, DARK, 0.06 * dens);   // 어두운 틈
+      for (k = 0; k < 170; k++) streak(R() * TW, R() * TH, 40 + R() * 120, 2.5 + R() * 5, -0.12 + (R() - 0.5) * 0.4, c, 0.06 * dens);   // 가는 결
+      var keys = Object.keys(sprites); if (keys.length > 12) delete sprites[keys[0]];
+      sprites[key] = o;
+      return o;
+    }
+    function stratusSpec() {
+      var kd = kind();
+      return { cloudy: [[170, 180, 200], 1, 1], rain: [[132, 144, 168], 1, 1], storm: [[100, 110, 136], 1, 1], snow: [[218, 224, 238], 0.9, 0.9], fog: [[204, 210, 220], 0.8, 0.7], partly: [[255, 255, 255], 0.7, 0.5] }[kd] || null;
+    }
     function cirrusSprite(c) {
       // 얇게 흩날리는 새털구름(애플 날씨 배경처럼 가늘고 길게 번지는 결)
       var q = clamp((P.sc || 1) * 1.2, 1, 5);
@@ -6819,10 +6854,11 @@
     function setupParts() {
       if (!W) return;
       var kd = kind(), hv = heavy(wx ? wx.code : null), sc = clamp(window.innerWidth / 700, 0.55, 1.3) * (P.dpr || 1);
-      var nc = { clear: 0, partly: 2, cloudy: 15, rain: 15, snow: 12, storm: 16, fog: 4 }[kd], nci = { clear: 4, partly: 3 }[kd] || 0;
+      var nc = 0, nci = { clear: 4, partly: 5 }[kd] || 0;
       var cover = kd === 'cloudy' || kd === 'rain' || kd === 'storm' || kd === 'snow'; // 하늘을 덮는 구름
       P.clouds = []; for (var i = 0; i < nc; i++) { var s = cover ? 1 + Math.random() * 1.1 : 0.8 + Math.random() * 0.9; P.clouds.push({ x: Math.random() * 1.5 - 0.25, y: cover ? -0.02 + Math.random() * 0.36 : 0.05 + Math.random() * 0.4, s: s, vr: Math.floor(Math.random() * 3), v: (cover ? 0.007 : 0.005) + Math.random() * 0.01, a: cover ? 0.82 + Math.random() * 0.18 : 0.88 + Math.random() * 0.12 }); }
       P.cirrus = []; for (i = 0; i < nci; i++) P.cirrus.push({ x: Math.random() * 1.3 - 0.15, y: 0.02 + Math.random() * 0.42, s: 0.8 + Math.random() * 0.8, v: 0.0016 + Math.random() * 0.002, a: 0.75 + Math.random() * 0.25 });
+      P.st = [{ x: 0.1, v: 0.0035 }, { x: 0.55, v: 0.0065 }];
       P.sc = sc; // 구름 크기 기준(화면 폭 기준, CSS 픽셀) — 캔버스 점 수에 맞춰 곱해 쓴다
       P.stars = []; for (i = 0; i < 90; i++) P.stars.push({ x: Math.random() * W, y: Math.random() * H * 0.6, r: (0.5 + Math.random() * 1.1) * (P.dpr || 1), ph: Math.random() * 6.28 });
       P.drops = []; if (kd === 'rain' || kd === 'storm') { var nd = hv ? 300 : 170; for (i = 0; i < nd; i++) P.drops.push({ x: Math.random() * W, y: Math.random() * H, l: (16 + Math.random() * 20) * (P.dpr || 1), v: (850 + Math.random() * 500) * (P.dpr || 1) }); }
@@ -6909,13 +6945,23 @@
         ctx.globalAlpha = 1;
       }
       // 구름
-      var ccol = cloudRGB(), cw, ch;
+      var ccol = cloudRGB(), cw, ch, SS = stratusSpec();
+      if (SS) {
+        var tile = stratusTile(SS[0], SS[1]), L2 = [[0, 0, 1, 1], [0.37, -0.04, 1.4, 0.75]];
+        for (i = 0; i < 2; i++) {
+          var Lp = P.st[i], dh = H * L2[i][2], dw = dh * 1.8;
+          if (animate) { Lp.x += Lp.v * dt; if (Lp.x > 1) Lp.x -= 1; }
+          ctx.globalAlpha = SS[2] * L2[i][3];
+          for (var tx = -dw + (Lp.x % 1) * dw; tx < W; tx += dw) ctx.drawImage(tile, tx, H * L2[i][1], dw, dh);
+        }
+        ctx.globalAlpha = 1;
+      }
       if (P.cirrus && P.cirrus.length) {
         var csp = cirrusSprite(ccol);
         for (i = 0; i < P.cirrus.length; i++) {
           p = P.cirrus[i]; cw = 640 * p.s * P.sc; ch = cw * 150 / 640;
           if (animate) { p.x += p.v * dt; if (p.x > 1.35) p.x = -0.35; }
-          ctx.save(); ctx.translate(p.x * W, p.y * H); ctx.rotate(-0.38); ctx.globalAlpha = p.a;
+          ctx.save(); ctx.translate(p.x * W, p.y * H); ctx.rotate(-0.13); ctx.globalAlpha = p.a;
           ctx.drawImage(csp, -cw / 2, -ch / 2, cw, ch); ctx.restore();
         }
       }
