@@ -6718,7 +6718,7 @@
       }
       cur = { top: adj(tc[0]), bot: adj(tc[1]), h: k.h, day: k.h > s.sr && k.h < s.ss ? 1 : 0, dark: clamp((70 - lum(tc[0])) / 50, 0, 1), code: code };
       // 흐린 날: 애플 날씨처럼 푸른빛 도는 짙은 회청색 바탕 위에 가로로 길게 번진 구름결을 얹는다(밤엔 더 어둡게)
-      var OV = { cloudy: [[132, 140, 154], [172, 180, 192]], fog: [[148, 154, 164], [186, 192, 200]], snow: [[118, 128, 146], [166, 175, 190]], rain: [[74, 84, 100], [108, 118, 134]], storm: [[22, 26, 38], [44, 50, 66]] }[kd];
+      var OV = { cloudy: [[176, 184, 198], [206, 212, 223]], fog: [[168, 174, 184], [200, 206, 214]], snow: [[118, 128, 146], [166, 175, 190]], rain: [[74, 84, 100], [108, 118, 134]], storm: [[22, 26, 38], [44, 50, 66]] }[kd];
       if (OV) { var dk = 1 - (kd === 'storm' ? 0.55 : 0.72) * cur.dark; cur.top = OV[0].map(function (v) { return v * dk; }); cur.bot = OV[1].map(function (v) { return v * dk; }); }
     }
     // 화이트 모드인데 하늘이 거의 검으면(밤) 화면 전체를 다크 모드 색으로 자동 전환 — 글씨가 또렷하고 색도 화려하게
@@ -6802,13 +6802,18 @@
       for (k = 0; k < 150; k++) streak(R() * TW, R() * TH, 90 + R() * 200, 7 + R() * 15, -0.12 + (R() - 0.5) * 0.34, c, 0.045 * dens);   // 중간 결
       for (k = 0; k < 70; k++) streak(R() * TW, R() * TH, 90 + R() * 210, 8 + R() * 16, -0.12 + (R() - 0.5) * 0.34, DARK, 0.06 * dens);   // 어두운 틈
       for (k = 0; k < 170; k++) streak(R() * TW, R() * TH, 40 + R() * 120, 2.5 + R() * 5, -0.12 + (R() - 0.5) * 0.4, c, 0.06 * dens);   // 가는 결
+      if (dens > 1.1) {   // 흐린 날: 사진처럼 하늘 전체에 번진 둥근 얼룩(짙고 옅은 구름 덩이)
+        var B = [88, 96, 112], bl;
+        for (k = 0; k < 46; k++) { bl = R() * 3.14; streak(R() * TW, R() * TH, 70 + R() * 90, 40 + R() * 50, bl, k % 3 ? B : c, k % 3 ? 0.075 : 0.1); }
+        for (k = 0; k < 60; k++) streak(R() * TW, R() * TH, 26 + R() * 40, 16 + R() * 22, R() * 3.14, k % 2 ? B : c, 0.06);
+      }
       var keys = Object.keys(sprites); if (keys.length > 12) delete sprites[keys[0]];
       sprites[key] = o;
       return o;
     }
     function stratusSpec() {
       var kd = kind();
-      return { cloudy: [[226, 230, 238], 1.15, 1], rain: [[170, 182, 202], 1, 1], storm: [[100, 110, 136], 1, 1], snow: [[236, 240, 248], 0.9, 0.9], fog: [[222, 226, 234], 0.8, 0.7], partly: [[255, 255, 255], 0.7, 0.5] }[kd] || null;
+      return { cloudy: [[240, 243, 250], 1.2, 1], rain: [[170, 182, 202], 1, 1], storm: [[100, 110, 136], 1, 1], snow: [[236, 240, 248], 0.9, 0.9], fog: [[222, 226, 234], 0.8, 0.7], partly: [[255, 255, 255], 0.7, 0.5] }[kd] || null;
     }
     function stratusSpecN() {   // 밤·새벽엔 구름 색도 같이 어둡게
       var sp = stratusSpec(); if (!sp) return sp;
@@ -7092,13 +7097,17 @@
     function fetchWx(force) {
       if (mode === 'off' || fetching) return;
       var p = pos(), la = Math.round(p.lat * 10) / 10, lo = Math.round(p.lng * 10) / 10;
-      if (!force && wx && wx.la === la && wx.lo === lo && Date.now() - wx.at < 25 * 60e3) return;
+      if (!force && wx && wx.la === la && wx.lo === lo && wx.v === 2 && Date.now() - wx.at < 25 * 60e3) return;
       fetching = true;
-      var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + la + '&longitude=' + lo + '&current=temperature_2m,weather_code&daily=sunrise,sunset&timezone=Asia%2FSeoul&forecast_days=1';
+      var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + la + '&longitude=' + lo + '&current=temperature_2m,weather_code,cloud_cover&daily=sunrise,sunset&timezone=Asia%2FSeoul&forecast_days=1';
       // 하늘 상태(맑음·구름많음·흐림·비·눈)는 기상청 값을 우선 쓰고, 못 받으면 Open-Meteo 값으로 대신한다
       var kmaP = fetch('/api/weather?lat=' + encodeURIComponent(p.lat) + '&lng=' + encodeURIComponent(p.lng))
         .then(function (r) { return r.ok ? r.json() : null; }).then(function (w) {
-          var n = w && w.now, h0 = w && w.fcst && w.fcst.hours && w.fcst.hours[0];
+          var n = w && w.now, hs = (w && w.fcst && w.fcst.hours) || [], h0 = hs[0];
+          try {   // 지금 시각에 가장 가까운 예보 시간을 고른다
+            var kn = new Date(Date.now() + 9 * 3600e3), key = kn.getUTCFullYear() * 1e6 + (kn.getUTCMonth() + 1) * 1e4 + kn.getUTCDate() * 100 + kn.getUTCHours();
+            var bd = 1e9; hs.forEach(function (h) { var hk = Number(h.d) * 100 + Math.floor(Number(h.t) / 100), dd = Math.abs(hk - key); if (h.sky != null && dd < bd) { bd = dd; h0 = h; } });
+          } catch (_) {}
           if (!n || n.tmp == null) return null;
           var pty = Number(n.pty) || 0, sk = h0 ? Number(h0.sky) : 0;
           if (!pty && !sk) return { tmp: n.tmp };
@@ -7110,8 +7119,13 @@
         if (!j && !(k && (k.pty || k.sky))) throw new Error('no data');
         var d0 = j && j.daily && j.daily.sunrise && j.daily.sunrise[0];
         var old = wx || {};
-        wx = { la: la, lo: lo, at: Date.now(), code: j ? j.current.weather_code : (old.code != null ? old.code : 1), temp: k && k.tmp != null ? k.tmp : (j ? j.current.temperature_2m : old.temp),
+        wx = { v: 2, la: la, lo: lo, at: Date.now(), code: j ? j.current.weather_code : (old.code != null ? old.code : 1), temp: k && k.tmp != null ? k.tmp : (j ? j.current.temperature_2m : old.temp),
                sr: j ? parseHM(d0) : old.sr, ss: j ? parseHM(j.daily.sunset && j.daily.sunset[0]) : old.ss, ymd: d0 ? d0.slice(0, 10) : old.ymd };
+        if (!(k && (k.pty || k.sky)) && j && j.current.cloud_cover != null && wx.code <= 3) {   // 기상청 값이 없으면 구름양으로 보정
+          var cc = Number(j.current.cloud_cover);
+          if (cc >= 85) { wx.kc = 3; wx.kt = '흐림'; } else if (cc >= 55 && wx.code < 2) { wx.kc = 2; wx.kt = '구름많음'; }
+          else if (cc >= 55) { wx.kt = '구름많음'; }
+        }
         if (k && (k.pty || k.sky)) {
           var omk = kindOf(wx.code), kc, kt;
           if (k.pty) {
