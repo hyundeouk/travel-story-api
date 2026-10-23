@@ -435,13 +435,13 @@
   .golf-food a small { display: block; color: var(--ink-dim); font-size: 12px; margin-top: 2px; }
   .wx-days { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-width: 720px; }
   @media (max-width: 600px) { .wx-days { gap: 6px; } .wx-day { padding: 8px; font-size: 13px; } .wx-day .wx-ic { font-size: 13px; } }
-  .wx-day { border: 1px solid var(--line, #ddd); border-radius: 12px; padding: 10px 12px; }
+  .wx-day { border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 12px; padding: 10px 12px; background: rgba(10, 14, 12, 0.66); }
   .wx-day b { display: block; font-size: 14px; margin-bottom: 4px; }
   .wx-day .wx-ic { font-size: 15px; }
   .wx-day .wx-t { font-size: 15px; margin: 4px 0 2px; } .wx-day .wx-t .lo { color: #2a7de1; } .wx-day .wx-t .hi { color: #d9480f; }
   .wx-day small, .wx-h small { color: var(--ink-dim, #777); font-size: 12px; }
   .wx-hours { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 4px; margin-top: 8px; -webkit-overflow-scrolling: touch; }
-  .wx-h { flex: 0 0 auto; min-width: 54px; text-align: center; border: 1px solid var(--line, #ddd); border-radius: 10px; padding: 6px 4px; font-size: 13px; line-height: 1.35; }
+  .wx-h { flex: 0 0 auto; min-width: 54px; text-align: center; background: rgba(10, 14, 12, 0.66); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px; padding: 6px 4px; font-size: 13px; line-height: 1.35; }
   .wx-h.day0 { border-left: 3px solid #2a7de1; }
   .wx-mt { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(14, 116, 144, 0.08); font-size: 14px; line-height: 1.5; }
   /* 날씨 탭: 위 탭 줄과 같은 너비로 꽉 채우고, Windy 지도는 크게 */
@@ -523,8 +523,8 @@
   .ga-summary { border: 1px solid #f0b4b4; background: #fff4f4; color: #8a1c1c; border-radius: 12px; padding: 9px 12px; margin-bottom: 10px; font-size: 0.9rem; }
   [data-theme="dark"] .ga-summary { background: #3a1d1d; color: #ffd5d5; border-color: #6b2c2c; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ga-summary { background: #3a1d1d; color: #ffd5d5; border-color: #6b2c2c; } }
-  .picks-box { border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--surface); margin-bottom: 14px; }
-  .food-near { border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--surface); }
+  .picks-box { margin-bottom: 14px; } /* 검은 바탕 판 없이 캠핑·골프처럼 카드가 바로 놓이게 */
+  .food-near { margin-top: 6px; }
   .food-near .place-list { margin-top: 10px; }
   .picks-box .pk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
   .picks-box .pk-q { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; margin-top: 8px; flex: 1 1 220px; max-width: 420px; } .picks-box .pk-q span { margin: 0; white-space: nowrap; } .picks-box .pk-q input { flex: 1; min-width: 0; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 0.9rem; }
@@ -532,7 +532,7 @@
   .picks-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
   .picks-head .copy-hint { margin: 0; display: inline; }
   .picks-filter { margin-top: 8px; }
-  .pick-card { display: flex; gap: 10px; align-items: flex-start; text-align: left; border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--bg); color: var(--ink); font: inherit; cursor: pointer; position: relative; min-width: 0; }
+  .pick-card { display: flex; gap: 10px; align-items: flex-start; text-align: left; border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; position: relative; min-width: 0; }
   .pick-card.st-pending { border-style: dashed; border-color: #f79009; } .pick-card.st-hidden { opacity: 0.6; }
   .pk-img { flex: none; width: 56px; height: 56px; border-radius: 10px; overflow: hidden; background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 24px; }
   .pk-img img { width: 100%; height: 100%; object-fit: cover; }
@@ -641,7 +641,7 @@
   .wx-results { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 30; padding: 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow, 0 6px 20px rgba(0,0,0,.18)); max-height: 340px; }
   .wx-results .loc-note { font-size: 0.85rem; color: var(--ink-dim); padding: 6px 8px; }
   @media (max-width: 700px) { .wx-top { flex-wrap: wrap; } .wx-search { order: 3; flex-basis: 100%; max-width: none; } }
-  .wx-now { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 16px; margin-bottom: 10px; border-radius: 14px; background: rgba(42, 125, 225, 0.09); }
+  .wx-now { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 16px; margin-bottom: 10px; border-radius: 14px; background: rgba(10, 14, 12, 0.66); border: 1px solid rgba(255, 255, 255, 0.14); }
   .wx-now .big { font-size: 2.4rem; font-weight: 700; line-height: 1; }
   .wx-now .ic { font-size: 2rem; line-height: 1; }
   .wx-now .det { font-size: 14px; line-height: 1.55; }
@@ -1001,7 +1001,7 @@
   html.sky-on.sky-lt-c { --tc: #0a1322; --tc-dim: rgba(10,19,34,0.78); --tc-halo: rgba(255,255,255,0.6); }
   html.sky-on header.top h1, html.sky-on .sky-line #sky-txt { color: var(--th); text-shadow: 0 0 7px var(--th-halo), 0 1px 2px var(--th-halo); transition: color 0.6s; }
   html.sky-on .brand span, html.sky-on .sky-credit { color: var(--th-dim); text-shadow: 0 0 6px var(--th-halo); transition: color 0.6s; }
-  html.sky-on .status-line:not(.err), html.sky-on .copy-hint, html.sky-on .wx-place, html.sky-on .empty-state, html.sky-on .empty-state strong { color: var(--tc); text-shadow: 0 0 7px var(--tc-halo), 0 1px 2px var(--tc-halo); transition: color 0.6s; }
+  html.sky-on .status-line:not(.err), html.sky-on .copy-hint, html.sky-on .wx-place, html.sky-on .empty-state, html.sky-on .empty-state strong, html.sky-on .picks-head b, html.sky-on .picks-box .filter > span, html.sky-on .picks-sep { color: var(--tc); text-shadow: 0 0 7px var(--tc-halo), 0 1px 2px var(--tc-halo); transition: color 0.6s; }
   html.sky-on .status-line.err { text-shadow: 0 0 7px var(--tc-halo); }
   @media (max-width: 560px) { .sky-line { flex-wrap: wrap; } .sky-line #sky-txt { flex-basis: 100%; } .sky-right { max-width: none; margin-left: auto; } }
   @media print { #sky-bg { display: none !important; } html.sky-on, html.sky-on body { background: #fff !important; } }
