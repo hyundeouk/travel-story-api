@@ -985,12 +985,13 @@
   .sky-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink-dim); font-size: 0.82rem; font-weight: 700; padding: 5px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; flex: none; }
   #sky-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; transition: background 1.2s linear; }
   #sky-bg canvas { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; display: block; }
-  .sky-veil { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, calc(0.04 * var(--vk, 1))) 0%, rgba(0, 0, 0, calc(0.2 * var(--vk, 1))) 40%, rgba(0, 0, 0, calc(0.42 * var(--vk, 1))) 100%); }
+  .sky-veil { display: none; } /* 하늘 위를 덮는 반투명 막은 쓰지 않는다 */
   #sky-bg { opacity: 0; transition: opacity 1.4s ease; }
   #sky-bg.in { opacity: 1; }
   html.sky-on { background: var(--bg); }
   html.sky-on body { background: transparent; }
-  html.sky-on header.top { background: rgba(var(--bg-rgb), calc(0.42 * var(--vk, 1))); }
+  html.sky-on header.top { background: transparent; transition: background 0.25s; }
+  html.sky-on.scrolled header.top { background: rgba(0, 0, 0, 0.88); }
   html.sky-on .sky-line #sky-txt { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.55), 0 0 10px rgba(0,0,0,0.45); }
   /* 하늘 위에 바로 올라간 글씨(제목·안내문)는 바탕색 빛무리로 감싸 회색·비 오는 하늘에서도 또렷하게 */
   html.sky-on header.top h1, html.sky-on .status-line, html.sky-on .copy-hint, html.sky-on .wx-place, html.sky-on .empty-state, html.sky-on .sky-credit {
@@ -6772,7 +6773,7 @@
       return o;
     }
     function cloudRGB() {
-      var base = { clear: [255, 255, 255], partly: [255, 255, 255], cloudy: [88, 94, 108], snow: [150, 156, 170], rain: [66, 72, 88], storm: [46, 50, 62], fog: [100, 106, 118] }[kind()];
+      var base = { clear: [255, 255, 255], partly: [255, 255, 255], cloudy: [128, 134, 148], snow: [178, 184, 198], rain: [96, 104, 122], storm: [66, 72, 88], fog: [120, 126, 140] }[kind()];
       var c = mix(base, [40, 48, 72], (cur.dark || 0) * 0.75);
       return mix(c, cur.bot, kind() === 'clear' || kind() === 'partly' ? 0.06 : 0.14);
     }
@@ -6947,6 +6948,7 @@
       cv.width = W; cv.height = H;
       setupParts(); still();
     }
+    window.addEventListener('scroll', function () { document.documentElement.classList.toggle('scrolled', (window.scrollY || 0) > 8); }, { passive: true });
     function build() {
       document.documentElement.classList.add('sky-on');
       if (!root) {
