@@ -8,7 +8,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png">
 <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
-<meta name="theme-color" content="#1f7a63">
+<meta name="theme-color" content="#000000">
 <script>
 // 아이패드(iPadOS) 사파리는 컴퓨터(Mac)인 척하는 주소를 보내서, 카카오 지도가 휴대폰용 부드러운 두 손가락 확대·축소를
 // 쓰지 않는다. 카카오 지도가 읽기 전에 "iPad"라는 표시를 붙여 아이폰처럼 부드럽게 늘어나고 줄어들게 한다.
@@ -81,10 +81,10 @@
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #141c17;
-      --bg-rgb: 20, 28, 23;
-      --surface: #1c2620;
-      --surface-2: #223029;
+      --bg: #000000;
+      --bg-rgb: 0, 0, 0;
+      --surface: #101412;
+      --surface-2: #1a201d;
       --ink: #e9eadf;
       --ink-dim: #a7b3ab;
       --accent: #74c49a;
@@ -97,10 +97,10 @@
     }
   }
   :root[data-theme="dark"] {
-    --bg: #141c17;
-    --bg-rgb: 20, 28, 23;
-    --surface: #1c2620;
-    --surface-2: #223029;
+    --bg: #000000;
+    --bg-rgb: 0, 0, 0;
+    --surface: #101412;
+    --surface-2: #1a201d;
     --ink: #e9eadf;
     --ink-dim: #a7b3ab;
     --accent: #74c49a;
@@ -113,7 +113,7 @@
   }
 
   * { box-sizing: border-box; }
-  html { height: 100%; -webkit-text-size-adjust: 100%; overflow-x: hidden; }
+  html { height: 100%; -webkit-text-size-adjust: 100%; overflow-x: hidden; background: #000; }
   @supports (overflow-x: clip) { html { overflow-x: clip; } }
   body { max-width: 100%; overflow-wrap: break-word; }
   img, video, iframe, canvas { max-width: 100%; }
@@ -985,7 +985,9 @@
   .sky-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink-dim); font-size: 0.82rem; font-weight: 700; padding: 5px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; flex: none; }
   #sky-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; transition: background 1.2s linear; }
   #sky-bg canvas { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; display: block; }
-  .sky-veil { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10, 22, 46, calc(0.03 * var(--vk, 1))) 0%, rgba(10, 22, 46, calc(0.14 * var(--vk, 1))) 40%, rgba(10, 22, 46, calc(0.3 * var(--vk, 1))) 100%); }
+  .sky-veil { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, calc(0.04 * var(--vk, 1))) 0%, rgba(0, 0, 0, calc(0.2 * var(--vk, 1))) 40%, rgba(0, 0, 0, calc(0.42 * var(--vk, 1))) 100%); }
+  #sky-bg { opacity: 0; transition: opacity 1.4s ease; }
+  #sky-bg.in { opacity: 1; }
   html.sky-on { background: var(--bg); }
   html.sky-on body { background: transparent; }
   html.sky-on header.top { background: rgba(var(--bg-rgb), calc(0.42 * var(--vk, 1))); }
@@ -6684,7 +6686,8 @@
         else if (kd === 'fog') gr = [l + 50, l + 52, l + 56];
         else if (kd === 'snow') gr = [l + 40, l + 46, l + 56];         // 눈: 밝은 회청색
         else if (kd === 'cloudy') gr = [l + 52, l + 56, l + 62];       // 흐림(해가 안 보임): 회색
-        return mix(c, gr, g);
+        var o = mix(c, gr, g), dm = { cloudy: 0.2, fog: 0.25, rain: 0.5, snow: 0.3 }[kd];
+        return dm ? [o[0] * dm, o[1] * dm, o[2] * dm] : o; // 흐린 날 하늘은 회색으로 뜨지 않고 검은 바탕에 가깝게
       }
       cur = { top: adj(tc[0]), bot: adj(tc[1]), h: k.h, day: k.h > s.sr && k.h < s.ss ? 1 : 0, dark: clamp((70 - lum(tc[0])) / 50, 0, 1), code: code };
     }
@@ -6769,7 +6772,7 @@
       return o;
     }
     function cloudRGB() {
-      var base = { clear: [255, 255, 255], partly: [255, 255, 255], cloudy: [214, 217, 223], snow: [236, 240, 246], rain: [112, 121, 136], storm: [64, 70, 84], fog: [226, 229, 233] }[kind()];
+      var base = { clear: [255, 255, 255], partly: [255, 255, 255], cloudy: [88, 94, 108], snow: [150, 156, 170], rain: [66, 72, 88], storm: [46, 50, 62], fog: [100, 106, 118] }[kind()];
       var c = mix(base, [40, 48, 72], (cur.dark || 0) * 0.75);
       return mix(c, cur.bot, kind() === 'clear' || kind() === 'partly' ? 0.06 : 0.14);
     }
@@ -6954,6 +6957,7 @@
         var rt = 0; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(resize, 150); });
       }
       root.style.display = '';
+      if (!root.classList.contains('in')) requestAnimationFrame(function () { requestAnimationFrame(function () { root.classList.add('in'); }); });
       compute(); applyBg(); resize(); start();
     }
     function teardown() {
