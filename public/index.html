@@ -6807,6 +6807,21 @@
         for (k = 0; k < 46; k++) { bl = R() * 3.14; streak(R() * TW, R() * TH, 70 + R() * 90, 40 + R() * 50, bl, k % 3 ? B : c, k % 3 ? 0.075 : 0.1); }
         for (k = 0; k < 60; k++) streak(R() * TW, R() * TH, 26 + R() * 40, 16 + R() * 22, R() * 3.14, k % 2 ? B : c, 0.06);
       }
+      // 겹쳐 그린 반투명 그라데이션의 '디더링' 점이 쌓여 네모 격자처럼 보이므로, 완성한 뒤 살짝 번지게 해서 없앤다
+      try {
+        var o2 = document.createElement('canvas'); o2.width = o.width; o2.height = o.height;
+        var x2 = o2.getContext('2d');
+        if ('filter' in x2) {
+          x2.filter = 'blur(' + (1.6 * q).toFixed(2) + 'px)';
+          // 타일을 좌우·상하로 이어 붙여도 가장자리가 어색하지 않게 3×3으로 깔고 가운데만 쓴다
+          for (var bx = -1; bx <= 1; bx++) for (var by = -1; by <= 1; by++) x2.drawImage(o, bx * o.width, by * o.height);
+        } else {
+          var o3 = document.createElement('canvas'); o3.width = Math.ceil(o.width / 3); o3.height = Math.ceil(o.height / 3);
+          var x3 = o3.getContext('2d'); x3.imageSmoothingQuality = 'high'; x3.drawImage(o, 0, 0, o3.width, o3.height);
+          x2.imageSmoothingQuality = 'high'; x2.drawImage(o3, 0, 0, o.width, o.height);
+        }
+        o = o2;
+      } catch (_) {}
       var keys = Object.keys(sprites); if (keys.length > 12) delete sprites[keys[0]];
       sprites[key] = o;
       return o;
