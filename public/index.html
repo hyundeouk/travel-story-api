@@ -1027,15 +1027,18 @@
   @media (max-width: 420px) { #poi-chips { gap: 3px; } #poi-chips .chip { padding: 3px 5px; font-size: 0.64rem; letter-spacing: -0.03em; } #poi-chips .row-title { font-size: 0.64rem; padding: 3px 4px; } }
   @media (max-width: 420px) { #map-chips { gap: 3px; } #map-chips .chip { padding: 3px 5px; font-size: 0.64rem; letter-spacing: -0.03em; } #map-chips .row-title { font-size: 0.64rem; padding: 3px 4px; } }
   @media (max-width: 375px) { #map-chips .row-title { display: none; } #map-chips .chip { padding: 3px 4px; } }
-  /* 휴대폰: 설정·움직임 단추는 작게 줄여 오른쪽 위에 위아래로 쌓고, 제목·날씨 글씨는 그 왼쪽에 둔다 */
+  /* 휴대폰: 설정·움직임 단추는 작게 줄여 오른쪽 위에 위아래로 쌓고, 제목·날씨 글씨는 그 왼쪽·아래에 둔다(날씨 줄은 단추 아래에서 시작하므로 한 줄에 다 들어간다) */
   @media (max-width: 560px) {
-    .sky-line { flex-wrap: nowrap; font-size: 1rem; }
-    .sky-line #sky-txt { flex: 1; padding-right: 112px; }
-    .sky-right { position: absolute; top: 14px; right: 16px; flex-direction: column; align-items: flex-end; flex-wrap: nowrap; gap: 5px; max-width: none; margin: 0; }
-    .sky-right .admin-btn, .sky-right .sky-btn { font-size: 0.68rem; padding: 3px 10px; line-height: 1.3; border-radius: 999px; }
-    .sky-right .admin-btn.with-sub { flex-direction: row; gap: 4px; align-items: baseline; padding: 3px 10px; border-radius: 999px; }
-    .sky-right .admin-btn .ab-sub { font-size: 0.62rem; }
+    .brand { margin-bottom: 8px; }
+    .sky-line { flex-wrap: nowrap; font-size: 1rem; min-height: 0; margin: 0 0 8px; }
+    .sky-line #sky-txt { flex: 1; }
+    .sky-credit { font-size: 0.64rem; }
+    .sky-right { position: absolute; top: 10px; right: 16px; flex-direction: column; align-items: flex-end; flex-wrap: nowrap; gap: 3px; max-width: none; margin: 0; }
+    .sky-right .admin-btn, .sky-right .sky-btn { font-size: 0.66rem; padding: 2px 9px; line-height: 1.25; border-radius: 999px; }
+    .sky-right .admin-btn.with-sub { flex-direction: row; gap: 4px; align-items: baseline; padding: 2px 9px; border-radius: 999px; }
+    .sky-right .admin-btn .ab-sub { font-size: 0.6rem; }
   }
+  @media (max-width: 359px) { .sky-line #sky-txt { padding-right: 96px; } }
   @media print { #sky-bg { display: none !important; } html.sky-on, html.sky-on body { background: #fff !important; } }
 </style>
 </head>
