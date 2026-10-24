@@ -1014,7 +1014,7 @@
     #map-chips .row-title { font-size: 0.7rem; min-width: 0; padding: 3px 5px; }
     #map-chips .chip { padding: 3px 6px; font-size: 0.68rem; border-width: 1.5px; flex: 1 1 auto; text-align: center; letter-spacing: -0.02em; }
     #map-chips .chip::before { display: none; }
-    #map-chips .near-n { font-size: 0.62rem; }
+    #map-chips .near-n { display: none; }   /* 폰에서는 단추 안의 검색 건수(숫자·…)를 숨겨 단추 크기가 변하지 않게 한다 */
   }
   /* 하늘 배경 위에서는 옆으로 넘기는 화살표 뒤에 검은 네모가 생기지 않게 한다 */
   html.sky-on .hs-wrap > .hs-more.r, html.sky-on .hs-wrap > .hs-more.l { background: none; }
