@@ -1608,7 +1608,7 @@
   paintThemeButtons();
 
   // ---------- 탭 전환 ----------
-  function switchView(target) {
+  function switchView(target, defer) {
     if (state.view !== target) tele.use('탭: ' + (tele.VIEW_NAME[target] || target));
     state.view = target;
     document.querySelectorAll('.segmented button').forEach(function (b) {
@@ -1620,23 +1620,45 @@
       $('view-' + v).classList.toggle('active', v === target);
     });
     $('fab-write').hidden = target !== 'feed';
-    if (target === 'map') renderMap();
-    if (target === 'golf') renderGolf();
-    if (target === 'mtn') renderMtn();
-    if (target === 'camp') renderCamp();
-    if (target === 'weather') renderWeatherTab();
-    if (target === 'gstory') renderGStories();
-    if (target === 'browse') renderBrowse();
-    if (target === 'food') renderFood();
-    if (target === 'mine') renderMine();
+    function paintView() {
+      if (state.view !== target) return;   // 그 사이 다른 탭으로 옮겼으면 그릴 필요 없다
+      if (target === 'map') renderMap();
+      if (target === 'golf') renderGolf();
+      if (target === 'mtn') renderMtn();
+      if (target === 'camp') renderCamp();
+      if (target === 'weather') renderWeatherTab();
+      if (target === 'gstory') renderGStories();
+      if (target === 'browse') renderBrowse();
+      if (target === 'food') renderFood();
+      if (target === 'mine') renderMine();
+    }
+    // 사람이 탭을 눌렀을 때는 누른 탭 표시부터 먼저 화면에 보이게 하고, 무거운 그리기는 그다음에 한다
+    if (defer && window.requestAnimationFrame) requestAnimationFrame(function () { setTimeout(paintView, 0); });
+    else paintView();
   }
   document.querySelectorAll('.segmented button').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var v = btn.getAttribute('data-view');
       if (v === 'map') { if (state.poiMode) exitPoiMode(null, true); state.mapLayers = { '내 주변': true }; state.mapHome = false; Object.keys(state.nearOn).forEach(function (k) { state.nearOn[k] = false; }); state.nearFit = true; }
-      switchView(v);
+      tapGuard.until = performance.now() + 500;
+      switchView(v, true);
     });
   });
+
+  // ---------- 누른 줄 알았는데 안 바뀌어서 또 누르는 경우 ----------
+  // 화면이 잠깐 멈춘 사이에 쌓인 두 번째 터치가 새 화면의 다른 단추를 누르지 않게 막는다.
+  //  · 탭을 누른 직후 0.5초 동안은 아래 내용 영역의 눌림을 무시
+  //  · 어떤 눌림이든 처리하느라 0.18초 넘게 멈췄다면, 그 멈춘 동안 들어온 눌림은 무시
+  var tapGuard = { until: 0, freezeEnd: 0 };
+  document.addEventListener('click', function (e) {
+    var inNav = e.target && e.target.closest && e.target.closest('.segmented');
+    if (e.isTrusted && !inNav && (e.timeStamp < tapGuard.freezeEnd || performance.now() < tapGuard.until)) {
+      e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      return;
+    }
+    var t0 = performance.now();
+    setTimeout(function () { var t1 = performance.now(); if (t1 - t0 > 180) tapGuard.freezeEnd = t1; }, 0);
+  }, true);
 
   // ---------- 지역 선택 ----------
   document.querySelectorAll('[data-area]').forEach(function (sel) {
@@ -6754,7 +6776,12 @@
       cur = { top: adj(tc[0]), bot: adj(tc[1]), h: k.h, day: k.h > s.sr && k.h < s.ss ? 1 : 0, dark: clamp((70 - lum(tc[0])) / 50, 0, 1), code: code };
       // 흐린 날: 애플 날씨처럼 푸른빛 도는 짙은 회청색 바탕 위에 가로로 길게 번진 구름결을 얹는다(밤엔 더 어둡게)
       var OV = { cloudy: [[176, 184, 198], [206, 212, 223]], fog: [[168, 174, 184], [200, 206, 214]], snow: [[118, 128, 146], [166, 175, 190]], rain: [[74, 84, 100], [108, 118, 134]], storm: [[22, 26, 38], [44, 50, 66]] }[kd];
-      if (OV) { var dk = 1 - (kd === 'storm' ? 0.55 : 0.72) * cur.dark; cur.top = OV[0].map(function (v) { return v * dk; }); cur.bot = OV[1].map(function (v) { return v * dk; }); }
+      cur.nd = clamp(cur.dark * 1.6, 0, 1);   // 해가 지면 흐린 하늘도 빨리 어두워진다(해 진 뒤 약 40분이면 밤)
+      if (OV) {
+        var NV = kd === 'storm' ? [[2, 3, 7], [9, 11, 20]] : [[4, 6, 13], [15, 20, 34]];   // 밤의 흐린 하늘: 거의 검은 남색
+        cur.top = OV[0].map(function (v, i) { return v + (NV[0][i] - v) * cur.nd; });
+        cur.bot = OV[1].map(function (v, i) { return v + (NV[1][i] - v) * cur.nd; });
+      }
     }
     // 화이트 모드인데 하늘이 거의 검으면(밤) 화면 전체를 다크 모드 색으로 자동 전환 — 글씨가 또렷하고 색도 화려하게
     function autoDark(skyl) {
@@ -6868,7 +6895,7 @@
     }
     function stratusSpecN() {   // 밤·새벽엔 구름 색도 같이 어둡게
       var sp = stratusSpec(); if (!sp) return sp;
-      var f = 1 - 0.68 * (Math.round((cur ? cur.dark : 0) * 8) / 8);
+      var f = 1 - 0.93 * (Math.round((cur ? (cur.nd != null ? cur.nd : cur.dark) : 0) * 8) / 8);
       return [sp[0].map(function (v) { return Math.round(v * f); }), sp[1], sp[2]];
     }
     function cirrusSprite(c) {
@@ -7008,8 +7035,8 @@
         ctx.globalAlpha = 1;
       }
       // 별
-      if (cur.dark > 0.05 && (kd === 'clear' || kd === 'partly')) {
-        var sa = cur.dark * (kd === 'clear' ? 1 : 0.5);
+      if (cur.dark > 0.05 && (kd === 'clear' || kd === 'partly' || kd === 'cloudy' || kd === 'fog')) {
+        var sa = (kd === 'cloudy' || kd === 'fog' ? (cur.nd || 0) : cur.dark) * { clear: 1, partly: 0.5, cloudy: 0.34, fog: 0.16 }[kd];   // 흐리면 별이 조금만 보인다
         ctx.fillStyle = '#fff';
         for (i = 0; i < P.stars.length; i++) {
           p = P.stars[i];
