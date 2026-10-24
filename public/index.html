@@ -1016,6 +1016,15 @@
     #map-chips .chip::before { display: none; }
     #map-chips .near-n { font-size: 0.62rem; }
   }
+  /* 하늘 배경 위에서는 옆으로 넘기는 화살표 뒤에 검은 네모가 생기지 않게 한다 */
+  html.sky-on .hs-wrap > .hs-more.r, html.sky-on .hs-wrap > .hs-more.l { background: none; }
+  /* '생활' 줄 단추도 '여행' 줄 단추와 같은 크기로 (휴대폰) */
+  @media (max-width: 560px) {
+    #poi-chips { gap: 4px; }
+    #poi-chips .row-title { font-size: 0.7rem; min-width: 0; padding: 3px 5px; }
+    #poi-chips .chip { padding: 3px 6px; font-size: 0.68rem; border-width: 1.5px; letter-spacing: -0.02em; }
+  }
+  @media (max-width: 420px) { #poi-chips { gap: 3px; } #poi-chips .chip { padding: 3px 5px; font-size: 0.64rem; letter-spacing: -0.03em; } #poi-chips .row-title { font-size: 0.64rem; padding: 3px 4px; } }
   @media (max-width: 420px) { #map-chips { gap: 3px; } #map-chips .chip { padding: 3px 5px; font-size: 0.64rem; letter-spacing: -0.03em; } #map-chips .row-title { font-size: 0.64rem; padding: 3px 4px; } }
   @media (max-width: 375px) { #map-chips .row-title { display: none; } #map-chips .chip { padding: 3px 4px; } }
   /* 휴대폰: 설정·움직임 단추는 작게 줄여 오른쪽 위에 위아래로 쌓고, 제목·날씨 글씨는 그 왼쪽에 둔다 */
