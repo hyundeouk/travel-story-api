@@ -443,10 +443,14 @@
   .wx-hours { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 4px; margin-top: 8px; -webkit-overflow-scrolling: touch; }
   .wx-h { flex: 0 0 auto; min-width: 54px; text-align: center; background: rgba(10, 14, 12, 0.66); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px; padding: 6px 4px; font-size: 13px; line-height: 1.35; }
   .wx-h.day0 { border-left: 3px solid #2a7de1; }
+  .wx-day .wx-ic { font-size: 14px; }
+  .wx-ir { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+  .wx-ir .wx-tx { font-size: 12.5px; line-height: 1.3; text-align: left; font-weight: 700; white-space: nowrap; }
+  .wx-ir .wx-tx small { font-weight: 400; }
   .wxi { display: inline-flex; flex-direction: column; align-items: center; line-height: 1; }
   .wxi-c { font-size: 28px; line-height: 1.05; }
-  .wxi-p { font-size: 16px; line-height: 1; letter-spacing: -1px; margin-top: -3px; white-space: nowrap; }
-  .wx-now .ic .wxi-c { font-size: 2.2rem; } .wx-now .ic .wxi-p { font-size: 1.15rem; }
+  .wxi-p { font-size: 8px; line-height: 1; letter-spacing: 0; margin-top: -1px; white-space: nowrap; }
+  .wx-now .ic .wxi-c { font-size: 2.2rem; } .wx-now .ic .wxi-p { font-size: 0.6rem; }
   .wx-mt { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(14, 116, 144, 0.08); font-size: 14px; line-height: 1.5; }
   /* 날씨 탭: 위 탭 줄과 같은 너비로 꽉 채우고, Windy 지도는 크게 */
   .sc { margin-top: 6px; }
@@ -8021,7 +8025,7 @@
         var i0 = Math.round((new Date(+d.d.slice(0, 4), +d.d.slice(4, 6) - 1, +d.d.slice(6, 8)) - new Date(+today.slice(0, 4), +today.slice(4, 6) - 1, +today.slice(6, 8))) / 86400000);
         var am = wxIcon(d.am), pm = wxIcon(d.pm);
         return '<div class="wx-day"><b>' + escapeHtml(wxDayName(d.d, i0)) + '</b>' +
-          '<div class="wx-ic">' + (am[0] ? '오전 ' + am[0] + ' ' + escapeHtml(am[1]) : '') + (am[0] && pm[0] ? '<br>' : '') + (pm[0] ? '오후 ' + pm[0] + ' ' + escapeHtml(pm[1]) : '') + '</div>' +
+          '<div class="wx-ic">' + (am[0] ? '<div class="wx-ir">' + wxIconHtml(d.am) + '<span class="wx-tx"><small>오전</small><br>' + escapeHtml(am[1]) + '</span></div>' : '') + (pm[0] ? '<div class="wx-ir">' + wxIconHtml(d.pm) + '<span class="wx-tx"><small>오후</small><br>' + escapeHtml(pm[1]) + '</span></div>' : '') + '</div>' +
           '<div class="wx-t">' + (d.tmn != null ? '<span class="lo">' + Math.round(d.tmn) + '°</span>' : '–') + ' / ' + (d.tmx != null ? '<span class="hi">' + Math.round(d.tmx) + '°</span>' : '–') + '</div>' +
           '<small>강수확률 ' + (d.pop || 0) + '% · 바람 최대 ' + (d.wsdMax != null ? d.wsdMax : '–') + 'm/s</small></div>';
       }).join('');
