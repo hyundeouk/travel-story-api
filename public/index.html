@@ -443,6 +443,10 @@
   .wx-hours { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 4px; margin-top: 8px; -webkit-overflow-scrolling: touch; }
   .wx-h { flex: 0 0 auto; min-width: 54px; text-align: center; background: rgba(10, 14, 12, 0.66); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px; padding: 6px 4px; font-size: 13px; line-height: 1.35; }
   .wx-h.day0 { border-left: 3px solid #2a7de1; }
+  .wxi { display: inline-flex; flex-direction: column; align-items: center; line-height: 1; }
+  .wxi-c { font-size: 28px; line-height: 1.05; }
+  .wxi-p { font-size: 16px; line-height: 1; letter-spacing: -1px; margin-top: -3px; white-space: nowrap; }
+  .wx-now .ic .wxi-c { font-size: 2.2rem; } .wx-now .ic .wxi-p { font-size: 1.15rem; }
   .wx-mt { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(14, 116, 144, 0.08); font-size: 14px; line-height: 1.5; }
   /* 날씨 탭: 위 탭 줄과 같은 너비로 꽉 채우고, Windy 지도는 크게 */
   .sc { margin-top: 6px; }
@@ -7865,6 +7869,14 @@
     if (o.pty > 0) return [{ 1: '🌧️', 2: '🌨️', 3: '❄️', 4: '🌦️' }[o.pty] || '🌧️', { 1: '비', 2: '비/눈', 3: '눈', 4: '소나기' }[o.pty] || '비'];
     return [{ 1: '☀️', 3: '⛅', 4: '☁️' }[o.sky] || '', { 1: '맑음', 3: '구름많음', 4: '흐림' }[o.sky] || ''];
   }
+  // 비·눈이 올 때는 구름 아래에 빗방울·눈송이를 크게 따로 그려 한눈에 알아보게 한다
+  function wxIconHtml(o) {
+    if (!o) return '';
+    var p = o.pty > 0 ? o.pty : 0;
+    if (!p) { var e = wxIcon(o)[0]; return e ? '<span class="wxi"><span class="wxi-c">' + e + '</span></span>' : ''; }
+    var drops = { 1: '💧💧💧', 2: '💧❄️💧', 3: '❄️❄️❄️', 4: '💧💧' }[p] || '💧💧💧';
+    return '<span class="wxi"><span class="wxi-c">' + (p === 4 ? '🌦️' : '☁️') + '</span><span class="wxi-p">' + drops + '</span></span>';
+  }
   function wxDayName(d, i0) {
     var dt = new Date(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8));
     var names = ['오늘', '내일', '모레', '글피'];
@@ -8023,7 +8035,7 @@
           var newDay = i > 0 && h.t === '0000';
           return '<div class="wx-h' + (newDay ? ' day0' : '') + '" title="' + escapeHtml(ic[1]) + '">' +
             '<small>' + (newDay ? escapeHtml(wxDayName(h.d, 9).trim()) + '<br>' : '') + Number(h.t.slice(0, 2)) + '시</small><br>' +
-            (ic[0] || '·') + '<br><b>' + Math.round(h.tmp) + '°</b><br>' +
+            (wxIconHtml(h) || '·') + '<br><b>' + Math.round(h.tmp) + '°</b><br>' +
             '<small>' + (h.pop != null ? h.pop + '%' : '') + (h.wsd != null ? '<br>' + h.wsd + 'm/s' : '') + '</small></div>';
         }).join('');
       }
@@ -8063,7 +8075,7 @@
         var h0 = f && f.hours && f.hours[0];
         var ic0 = wxIcon({ pty: n.pty || 0, sky: h0 ? h0.sky : null });
         var nb = String(n.base || '');
-        nowBox.innerHTML = (ic0[0] ? '<span class="ic">' + ic0[0] + '</span>' : '') +
+        nowBox.innerHTML = (ic0[0] ? '<span class="ic">' + wxIconHtml({ pty: n.pty || 0, sky: h0 ? h0.sky : null }) + '</span>' : '') +
           '<span class="big">' + Math.round(n.tmp * 10) / 10 + '°</span>' +
           '<div class="det"><b>지금' + (ic0[1] ? ' · ' + escapeHtml(ic0[1]) : '') + '</b><br>' +
           [n.reh != null ? '습도 ' + Math.round(n.reh) + '%' : '', n.wsd != null ? '바람 ' + n.wsd + 'm/s' + (n.vec != null ? ' (' + wxDir(n.vec) + ')' : '') : '', n.rn1 ? '1시간 강수 ' + n.rn1 + 'mm' : ''].filter(Boolean).join(' · ') +
