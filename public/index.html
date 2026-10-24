@@ -1003,7 +1003,18 @@
   html.sky-on .brand span, html.sky-on .sky-credit { color: var(--th-dim); text-shadow: 0 0 6px var(--th-halo); transition: color 0.6s; }
   html.sky-on .status-line:not(.err), html.sky-on .copy-hint, html.sky-on .wx-place, html.sky-on .empty-state, html.sky-on .empty-state strong, html.sky-on .picks-head b, html.sky-on .picks-box .filter > span, html.sky-on .picks-sep { color: var(--tc); text-shadow: 0 0 7px var(--tc-halo), 0 1px 2px var(--tc-halo); transition: color 0.6s; }
   html.sky-on .status-line.err { text-shadow: 0 0 7px var(--tc-halo); }
-  @media (max-width: 560px) { .sky-line { flex-wrap: wrap; } .sky-line #sky-txt { flex-basis: 100%; } .sky-right { max-width: none; margin-left: auto; } }
+  /* 공유·관리, 상세, 작성 같은 창(.sheet) 안은 바탕이 어두운 면이므로 하늘 색에 따른 글씨색·번짐을 쓰지 않는다 */
+  html.sky-on .sheet .status-line:not(.err), html.sky-on .sheet .copy-hint, html.sky-on .sheet .wx-place, html.sky-on .sheet .empty-state, html.sky-on .sheet .empty-state strong, html.sky-on .sheet .picks-head b, html.sky-on .sheet .picks-box .filter > span, html.sky-on .sheet .picks-sep { color: var(--ink-dim); text-shadow: none; }
+  html.sky-on .sheet .empty-state strong, html.sky-on .sheet .picks-head b, html.sky-on .sheet .picks-box .filter > span, html.sky-on .sheet .wx-place { color: var(--ink); }
+  /* 휴대폰: 설정·움직임 단추는 작게 줄여 오른쪽 위에 위아래로 쌓고, 제목·날씨 글씨는 그 왼쪽에 둔다 */
+  @media (max-width: 560px) {
+    .sky-line { flex-wrap: nowrap; font-size: 1rem; }
+    .sky-line #sky-txt { flex: 1; padding-right: 112px; }
+    .sky-right { position: absolute; top: 14px; right: 16px; flex-direction: column; align-items: flex-end; flex-wrap: nowrap; gap: 5px; max-width: none; margin: 0; }
+    .sky-right .admin-btn, .sky-right .sky-btn { font-size: 0.68rem; padding: 3px 10px; line-height: 1.3; border-radius: 999px; }
+    .sky-right .admin-btn.with-sub { flex-direction: row; gap: 4px; align-items: baseline; padding: 3px 10px; border-radius: 999px; }
+    .sky-right .admin-btn .ab-sub { font-size: 0.62rem; }
+  }
   @media print { #sky-bg { display: none !important; } html.sky-on, html.sky-on body { background: #fff !important; } }
 </style>
 </head>
