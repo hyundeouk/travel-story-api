@@ -489,6 +489,10 @@
   .hk-levels button[aria-pressed="true"] { background: #2b8a3e; color: #fff; border-color: transparent; }
   .hk-check { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 4px 0 8px; }
   .hk-check input { width: 18px; height: 18px; }
+  .hk-imp { margin: 0 0 10px; padding: 10px; border: 1px dashed var(--line); border-radius: 12px; background: var(--surface); }
+  .hk-imp-btn { display: inline-block; font-size: 14px; font-weight: 600; color: #fff; background: #2b8a3e; border-radius: 999px; padding: 7px 14px; cursor: pointer; }
+  .hk-imp-msg { font-size: 12.5px; color: var(--ink-dim); margin-top: 6px; line-height: 1.45; }
+  .hk-imp .field { margin: 8px 0 0; }
   .golf-rounds { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
   .golf-round { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; text-align: left; font: inherit; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); padding: 8px 12px; cursor: pointer; }
   .golf-round small { color: var(--ink-dim); margin-left: auto; }
@@ -2178,11 +2182,132 @@
     return '<div class="hk-read">' + detailRowsHtml(rows) +
       (h.review ? '<h4 class="pd-h4">산행 메모</h4><div class="detail-overview gs-memo">' + escapeHtml(h.review) + '</div>' : '') + '</div>';
   }
+  // ---- 애플 운동 기록(Health Auto Export JSON / GPX) 읽기 ----
+  var HX_HIKE_RE = /hik|trek|mountain|등산|하이킹|트레킹|산행/i;
+  function hxPad(n) { return (n < 10 ? '0' : '') + n; }
+  // 시각 문자열 → {d:'YYYY-MM-DD', hm:'HH:MM'} (오프셋이 있으면 적힌 현지 시각 그대로, Z(UTC)면 이 폰의 현지 시각)
+  function hxWall(s) {
+    if (s == null) return null;
+    s = String(s).trim();
+    var m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})/.exec(s);
+    if (!m) return null;
+    if (/Z$/i.test(s)) {
+      var d = new Date(s);
+      if (isNaN(d)) return null;
+      return { d: d.getFullYear() + '-' + hxPad(d.getMonth() + 1) + '-' + hxPad(d.getDate()), hm: hxPad(d.getHours()) + ':' + hxPad(d.getMinutes()) };
+    }
+    return { d: m[1], hm: m[2] + ':' + m[3] };
+  }
+  function hxQty(x) {
+    if (x == null) return null;
+    if (typeof x === 'number') return { q: x, u: '' };
+    if (typeof x === 'string') { var n = parseFloat(x); return isNaN(n) ? null : { q: n, u: '' }; }
+    var q = x.qty != null ? x.qty : x.value;
+    if (q == null || isNaN(Number(q))) return null;
+    return { q: Number(q), u: String(x.units || x.unit || '').toLowerCase() };
+  }
+  function hxKm(x) {
+    var v = hxQty(x); if (!v) return null;
+    if (v.u === 'mi') return v.q * 1.609344;
+    if (v.u === 'm') return v.q / 1000;
+    return v.q;
+  }
+  function hxMeters(x) {
+    var v = hxQty(x); if (!v) return null;
+    if (v.u === 'ft') return v.q * 0.3048;
+    if (v.u === 'cm') return v.q / 100;
+    if (v.u === 'km') return v.q * 1000;
+    return v.q;
+  }
+  function hxHaversine(a, b) {
+    var R = 6371, r = Math.PI / 180;
+    var dLa = (b.lat - a.lat) * r, dLo = (b.lng - a.lng) * r;
+    var h = Math.sin(dLa / 2) * Math.sin(dLa / 2) + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) * Math.sin(dLo / 2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  // 길 위의 점들(위도·경도·고도·시각)에서 거리·오른 높이·정상 높이/시각을 계산
+  function hxFromPoints(pts) {
+    var o = { km: null, ascent: null, summitAlt: null, summitHM: null, startW: null, endW: null };
+    if (!pts || !pts.length) return o;
+    var km = 0, i;
+    for (i = 1; i < pts.length; i++) if (pts[i].lat != null && pts[i - 1].lat != null) km += hxHaversine(pts[i - 1], pts[i]);
+    if (km > 0) o.km = km;
+    var withAlt = pts.filter(function (p) { return p.alt != null && !isNaN(p.alt); });
+    if (withAlt.length) {
+      var ref = withAlt[0].alt, asc = 0, top = withAlt[0];
+      withAlt.forEach(function (p) {
+        if (p.alt - ref >= 3) { asc += p.alt - ref; ref = p.alt; } else if (ref - p.alt >= 3) ref = p.alt;
+        if (p.alt > top.alt) top = p;
+      });
+      o.ascent = asc; o.summitAlt = top.alt;
+      var tw = hxWall(top.t); o.summitHM = tw ? tw.hm : null;
+    }
+    for (i = 0; i < pts.length; i++) if (hxWall(pts[i].t)) { o.startW = hxWall(pts[i].t); break; }
+    for (i = pts.length - 1; i >= 0; i--) if (hxWall(pts[i].t)) { o.endW = hxWall(pts[i].t); break; }
+    return o;
+  }
+  function hxFinish(name, startW, endW, kmV, upV, pts, isHike) {
+    var p = hxFromPoints(pts);
+    var km = kmV != null ? kmV : p.km;
+    var up = upV != null ? upV : p.ascent;
+    var s = startW || p.startW, e = endW || p.endW;
+    return {
+      name: name || '운동', hike: isHike,
+      date: s ? s.d : '', start: s ? s.hm : '', end: e ? e.hm : '',
+      summit: p.summitHM || '', summitAlt: p.summitAlt != null ? Math.round(p.summitAlt) : null,
+      km: km != null ? Math.round(km * 10) / 10 : null, ascent: up != null ? Math.round(up) : null,
+    };
+  }
+  function hxFromJson(j) {
+    var arr = Array.isArray(j) ? j : (j && j.data && j.data.workouts) || (j && j.workouts) || (j && Array.isArray(j.data) ? j.data : []);
+    var out = [];
+    arr.forEach(function (w) {
+      if (!w || typeof w !== 'object') return;
+      var pts = (Array.isArray(w.route) ? w.route : []).map(function (r) {
+        return { lat: r.latitude != null ? Number(r.latitude) : (r.lat != null ? Number(r.lat) : null), lng: r.longitude != null ? Number(r.longitude) : (r.lng != null ? Number(r.lng) : null), alt: r.altitude != null ? Number(r.altitude) : (r.elevation != null ? Number(r.elevation) : null), t: r.timestamp || r.time };
+      });
+      var up = w.elevationUp != null ? w.elevationUp : (w.elevation && w.elevation.up != null ? w.elevation.up : (w.metadata && w.metadata.HKElevationAscended));
+      var name = w.name || w.workoutActivityType || '';
+      out.push(hxFinish(name, hxWall(w.start), hxWall(w.end), hxKm(w.distance != null ? w.distance : w.totalDistance), hxMeters(up), pts, HX_HIKE_RE.test(name)));
+    });
+    return out;
+  }
+  function hxFromGpx(txt) {
+    var out = [];
+    var trks = txt.match(/<trk[\s>][\s\S]*?<\/trk>/gi) || [];
+    if (!trks.length && /<trkpt/i.test(txt)) trks = [txt];
+    trks.forEach(function (t) {
+      var nm = /<name>\s*(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?\s*<\/name>/i.exec(t);
+      var ty = /<type>\s*(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?\s*<\/type>/i.exec(t);
+      var name = ((nm && nm[1]) || (ty && ty[1]) || '').trim();
+      var pts = [], re = /<trkpt\b([^>]*)>([\s\S]*?)<\/trkpt>/gi, m;
+      while ((m = re.exec(t))) {
+        var la = /lat="([^"]+)"/i.exec(m[1]), lo = /lon="([^"]+)"/i.exec(m[1]);
+        var el = /<ele>\s*([^<\s]+)\s*<\/ele>/i.exec(m[2]), tm = /<time>\s*([^<\s]+)\s*<\/time>/i.exec(m[2]);
+        if (!la || !lo) continue;
+        pts.push({ lat: Number(la[1]), lng: Number(lo[1]), alt: el ? Number(el[1]) : null, t: tm ? tm[1] : null });
+      }
+      if (!pts.length) return;
+      out.push(hxFinish(name || '운동 경로', null, null, null, null, pts, !name || HX_HIKE_RE.test(name)));
+    });
+    return out;
+  }
+  function hxParse(text) {
+    var s = String(text || '').replace(/^﻿/, '').trim();
+    if (!s) return [];
+    if (s.charAt(0) === '<') return hxFromGpx(s);
+    return hxFromJson(JSON.parse(s));
+  }
   function mountHike(box, init) {
     init = init || {};
     var v = function (x) { return escapeHtml(x == null ? '' : String(x)); };
     box.innerHTML =
       '<div class="hk-form">' +
+        '<div class="hk-imp">' +
+          '<label class="hk-imp-btn">📥 애플 운동 기록 불러오기<input type="file" data-hk-file multiple hidden></label>' +
+          '<div class="hk-imp-msg" data-hk-imsg>Health Auto Export로 내보낸 트레킹 파일(.json 또는 .gpx)을 고르면 시간·거리·높이가 채워져요</div>' +
+          '<div class="field" data-hk-iwrap hidden><label>불러온 운동 (고르면 바뀌어요)</label><select data-hk-isel></select></div>' +
+        '</div>' +
         '<div class="field-row">' +
           '<div class="field"><label>산 이름</label><input data-hk="mountain" maxlength="60" value="' + v(init.mountain) + '" placeholder="예: 청량산"></div>' +
           '<div class="field" style="flex:2 1 200px"><label>코스</label><input data-hk="course" maxlength="100" value="' + v(init.course) + '" placeholder="예: 입석 → 장인봉 → 청량사"></div>' +
@@ -2219,6 +2344,50 @@
     }
     ['start', 'summit', 'end'].forEach(function (k) { q(k).addEventListener('input', paintDur); q(k).addEventListener('change', paintDur); });
     paintDur();
+    // 애플 운동 기록 파일 불러오기 (Health Auto Export JSON / GPX) — 폰 안에서만 읽고 서버로 보내지 않는다
+    (function () {
+      var fin = box.querySelector('[data-hk-file]'), msg = box.querySelector('[data-hk-imsg]');
+      var wrap = box.querySelector('[data-hk-iwrap]'), sel = box.querySelector('[data-hk-isel]');
+      var list = [];
+      function setv(k, val) {
+        var el = q(k);
+        if (val == null || val === '') return;
+        el.value = val;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      function apply(w) {
+        setv('start', w.start); setv('summit', w.summit); setv('end', w.end);
+        setv('km', w.km); setv('ascent', w.ascent); setv('summitAlt', w.summitAlt);
+        var f = box.closest('form') || box.closest('.sheet');
+        var d = f && f.querySelector('input[type="date"]');
+        if (d && w.date) { d.value = w.date; d.dispatchEvent(new Event('input', { bubbles: true })); d.dispatchEvent(new Event('change', { bubbles: true })); }
+        var bits = [w.date, w.start && w.end ? w.start + '~' + w.end : '', w.km != null ? w.km + 'km' : '', w.ascent != null ? '↑' + w.ascent + 'm' : '', w.summitAlt != null ? '최고 ' + w.summitAlt + 'm' : ''].filter(Boolean);
+        msg.textContent = '✅ 채웠어요 · ' + w.name + ' · ' + bits.join(' · ') + (w.summit ? ' · 정상 근처 ' + w.summit : '') + ' (틀린 곳은 고쳐 쓰세요)';
+      }
+      fin.addEventListener('change', function () {
+        var files = Array.prototype.slice.call(fin.files || []);
+        if (!files.length) return;
+        msg.textContent = '읽는 중…';
+        Promise.all(files.map(function (f) {
+          return f.text().then(function (t) { try { return hxParse(t); } catch (e) { return []; } });
+        })).then(function (all) {
+          list = [].concat.apply([], all).filter(function (w) { return w.start || w.km != null; });
+          list.sort(function (a, b) { return (b.hike - a.hike) || String(b.date + b.start).localeCompare(a.date + a.start); });
+          fin.value = '';
+          if (!list.length) { wrap.hidden = true; msg.textContent = '운동 기록을 찾지 못했어요. Health Auto Export의 운동(Workouts) 내보내기 파일(.json)이나 경로(.gpx)인지 확인해 주세요.'; return; }
+          sel.innerHTML = '';
+          list.forEach(function (w, i) {
+            var o = document.createElement('option');
+            o.value = String(i);
+            o.textContent = (w.hike ? '⛰️ ' : '') + w.name + ' · ' + w.date + ' ' + w.start + (w.km != null ? ' · ' + w.km + 'km' : '');
+            sel.appendChild(o);
+          });
+          wrap.hidden = list.length < 2;
+          apply(list[0]);
+        });
+      });
+      sel.addEventListener('change', function () { var w = list[Number(sel.value)]; if (w) apply(w); });
+    })();
     // 100대 명산이면 등산로(코스) 목록을 불러와 고를 수 있게 한다 (상세 화면 지도와 같은 순서)
     if (init.trailName) {
       mtnTrail({ trailName: init.trailName, lat: init.lat, lng: init.lng }).then(function (j) {
