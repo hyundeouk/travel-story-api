@@ -66,26 +66,46 @@ function looksUnregistered(status: number, text: string) {
   return status === 401 || status === 403 || /SERVICE_KEY_IS_NOT_REGISTERED|SERVICE_ACCESS_DENIED|"returnReasonCode"\s*:\s*"(30|20)"|<returnReasonCode>\s*(30|20)\s*</i.test(text);
 }
 
+// 공공데이터 서버가 가끔 느려서 시간 초과가 난다. 한 쪽을 받을 때 한 번 더 시도하고, 2쪽 이후는 한꺼번에 받아 기다리는 시간을 줄인다.
+class UpstreamTimeout extends Error {}
+async function fetchPage(name: string, key: string, page: number) {
+  const url = `${API}?serviceKey=${encodeURIComponent(key)}&pageNo=${page}&numOfRows=1000&type=json&srchFrtrlNm=${encodeURIComponent(name)}`;
+  let lastErr: any = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(attempt ? 10000 : 9000) });
+      return { status: res.status, text: await res.text() };
+    } catch (e: any) {
+      lastErr = e;
+    }
+  }
+  throw new UpstreamTimeout(lastErr?.message || 'timeout');
+}
+function parsePage(status: number, text: string) {
+  let data: any;
+  try { data = JSON.parse(text); } catch { throw new Error(`not json (${status}) ${text.slice(0, 160)}`); }
+  const root = data?.response || data || {};
+  const code = String(root?.header?.resultCode ?? '');
+  if (code && code !== '0' && code !== '00' && code !== '0000' && code !== '03') throw new Error(`${code} ${root?.header?.resultMsg || ''}`);
+  const body = root.body || {};
+  let items = body.items;
+  if (items && !Array.isArray(items)) items = Array.isArray(items.item) ? items.item : items.item ? [items.item] : [];
+  return { items: (items || []) as any[], total: Number(body.totalCount) || 0 };
+}
+
 async function fetchAll(name: string, key: string) {
   const rows: any[] = [];
-  let total = Infinity;
-  for (let page = 1; rows.length < total && page <= 30; page++) {
-    const url = `${API}?serviceKey=${encodeURIComponent(key)}&pageNo=${page}&numOfRows=1000&type=json&srchFrtrlNm=${encodeURIComponent(name)}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
-    const text = await res.text();
-    if (looksUnregistered(res.status, text)) return { needApply: true as const, rows };
-    let data: any;
-    try { data = JSON.parse(text); } catch { throw new Error(`not json (${res.status}) ${text.slice(0, 160)}`); }
-    const root = data?.response || data || {};
-    const code = String(root?.header?.resultCode ?? '');
-    if (code && code !== '0' && code !== '00' && code !== '0000' && code !== '03') throw new Error(`${code} ${root?.header?.resultMsg || ''}`);
-    const body = root.body || {};
-    let items = body.items;
-    if (items && !Array.isArray(items)) items = Array.isArray(items.item) ? items.item : items.item ? [items.item] : [];
-    items = items || [];
-    rows.push(...items);
-    total = Number(body.totalCount) || rows.length;
-    if (!items.length) break;
+  const first = await fetchPage(name, key, 1);
+  if (looksUnregistered(first.status, first.text)) return { needApply: true as const, rows };
+  const p1 = parsePage(first.status, first.text);
+  rows.push(...p1.items);
+  const pages = Math.min(30, Math.ceil((p1.total || rows.length) / 1000));
+  if (p1.items.length && pages > 1) {
+    const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => fetchPage(name, key, i + 2)));
+    for (const r of rest) {
+      if (looksUnregistered(r.status, r.text)) return { needApply: true as const, rows };
+      rows.push(...parsePage(r.status, r.text).items);
+    }
   }
   return { needApply: false as const, rows };
 }
@@ -150,6 +170,8 @@ export default async (req: Request, _context: Context) => {
     if (!debug && r.rows.length) await store.setJSON(cKey, out);
     return jsonResponse(debug ? { ...out, sample: r.rows.slice(0, 3) } : out);
   } catch (err: any) {
+    // 공공데이터 서버가 느려서 생긴 일은 잠시 뒤 다시 하면 되므로 504 로 알린다(화면은 오류로 기록하지 않는다)
+    if (err instanceof UpstreamTimeout) return jsonResponse({ error: 'upstream-timeout' }, { status: 504 });
     return jsonResponse({ error: err?.message || 'unknown error' }, { status: 502 });
   }
 };

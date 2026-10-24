@@ -4234,30 +4234,49 @@ var norm3 = (s) => String(s ?? "").replace(/\s+|\(.*?\)/g, "");
 function looksUnregistered2(status, text3) {
   return status === 401 || status === 403 || /SERVICE_KEY_IS_NOT_REGISTERED|SERVICE_ACCESS_DENIED|"returnReasonCode"\s*:\s*"(30|20)"|<returnReasonCode>\s*(30|20)\s*</i.test(text3);
 }
+var UpstreamTimeout = class extends Error {
+};
+async function fetchPage(name, key, page) {
+  const url = `${API2}?serviceKey=${encodeURIComponent(key)}&pageNo=${page}&numOfRows=1000&type=json&srchFrtrlNm=${encodeURIComponent(name)}`;
+  let lastErr = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(attempt ? 1e4 : 9e3) });
+      return { status: res.status, text: await res.text() };
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw new UpstreamTimeout(lastErr?.message || "timeout");
+}
+function parsePage(status, text3) {
+  let data;
+  try {
+    data = JSON.parse(text3);
+  } catch {
+    throw new Error(`not json (${status}) ${text3.slice(0, 160)}`);
+  }
+  const root = data?.response || data || {};
+  const code = String(root?.header?.resultCode ?? "");
+  if (code && code !== "0" && code !== "00" && code !== "0000" && code !== "03") throw new Error(`${code} ${root?.header?.resultMsg || ""}`);
+  const body = root.body || {};
+  let items = body.items;
+  if (items && !Array.isArray(items)) items = Array.isArray(items.item) ? items.item : items.item ? [items.item] : [];
+  return { items: items || [], total: Number(body.totalCount) || 0 };
+}
 async function fetchAll(name, key) {
   const rows = [];
-  let total = Infinity;
-  for (let page = 1; rows.length < total && page <= 30; page++) {
-    const url = `${API2}?serviceKey=${encodeURIComponent(key)}&pageNo=${page}&numOfRows=1000&type=json&srchFrtrlNm=${encodeURIComponent(name)}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(12e3) });
-    const text3 = await res.text();
-    if (looksUnregistered2(res.status, text3)) return { needApply: true, rows };
-    let data;
-    try {
-      data = JSON.parse(text3);
-    } catch {
-      throw new Error(`not json (${res.status}) ${text3.slice(0, 160)}`);
+  const first = await fetchPage(name, key, 1);
+  if (looksUnregistered2(first.status, first.text)) return { needApply: true, rows };
+  const p1 = parsePage(first.status, first.text);
+  rows.push(...p1.items);
+  const pages = Math.min(30, Math.ceil((p1.total || rows.length) / 1e3));
+  if (p1.items.length && pages > 1) {
+    const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => fetchPage(name, key, i + 2)));
+    for (const r of rest) {
+      if (looksUnregistered2(r.status, r.text)) return { needApply: true, rows };
+      rows.push(...parsePage(r.status, r.text).items);
     }
-    const root = data?.response || data || {};
-    const code = String(root?.header?.resultCode ?? "");
-    if (code && code !== "0" && code !== "00" && code !== "0000" && code !== "03") throw new Error(`${code} ${root?.header?.resultMsg || ""}`);
-    const body = root.body || {};
-    let items = body.items;
-    if (items && !Array.isArray(items)) items = Array.isArray(items.item) ? items.item : items.item ? [items.item] : [];
-    items = items || [];
-    rows.push(...items);
-    total = Number(body.totalCount) || rows.length;
-    if (!items.length) break;
   }
   return { needApply: false, rows };
 }
@@ -4313,6 +4332,7 @@ var mtntrail_default = async (req, _context) => {
     if (!debug && r.rows.length) await store13.setJSON(cKey, out);
     return jsonResponse(debug ? { ...out, sample: r.rows.slice(0, 3) } : out);
   } catch (err) {
+    if (err instanceof UpstreamTimeout) return jsonResponse({ error: "upstream-timeout" }, { status: 504 });
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
