@@ -6677,7 +6677,7 @@
     return Promise.resolve(null);
   }
   var geoTried = false; // 이번에 앱을 연 뒤 현재 위치를 받아 봤는지
-  function geoFresh() {
+  function geoFresh(fresh) {   // fresh: 직접 다시 확인을 눌렀을 때는 기억해 둔 위치를 쓰지 않고 새로 받는다
     return new Promise(function (resolve) {
       navigator.geolocation.getCurrentPosition(
         function (p) {
@@ -6690,7 +6690,7 @@
           geo.err = err && err.code === 1 ? 'denied' : 'failed';
           resolve(geo.pos); // 예전에 확인한 위치가 있으면 그것이라도 쓴다
         },
-        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: fresh ? 0 : 60000 }
       );
     });
   }
@@ -6716,7 +6716,7 @@
     var before = geo.pos;
     var job = (force ? Promise.resolve('ask') : geoPermState()).then(function (st) {
       // 이번에 연 뒤 처음이거나, 직접 다시 확인을 눌렀거나, 이미 허용된 상태면 현재 위치를 받는다
-      if (force || !geoTried || st === 'granted') { geoTried = true; return geoFresh(); }
+      if (force || !geoTried || st === 'granted') { geoTried = true; return geoFresh(!!force); }
       return geo.pos;
     }).then(function (r) { geo.pending = null; return r; }, function () { geo.pending = null; return geo.pos; });
     geo.pending = job;
@@ -7936,7 +7936,14 @@
     var wbox = $('wx-windy');
     var ifr = wbox.querySelector('iframe');
     var url = windyUrl(pos.lat, pos.lng);
-    if (ifr.getAttribute('src') !== url) ifr.setAttribute('src', url);
+    // 장소가 바뀌었거나 "내 위치 날씨"를 눌렀으면 지도 창을 새로 만든다(아이패드·사파리는 창 주소만 바꾸면 이전 위치 그대로일 때가 있다)
+    if (wbox.getAttribute('data-url') !== url || force) {
+      var nf = document.createElement('iframe');
+      nf.setAttribute('data-windy', ''); nf.title = 'Windy 날씨 지도'; nf.referrerPolicy = 'no-referrer-when-downgrade';
+      nf.src = url + (force ? '&_=' + Date.now().toString(36) : '');
+      ifr.replaceWith(nf);
+      wbox.setAttribute('data-url', url);
+    }
     wbox.hidden = false;
     $('wx-windy-link').href = 'https://www.windy.com/' + Number(pos.lat).toFixed(3) + '/' + Number(pos.lng).toFixed(3);
     status.textContent = '날씨 예보를 불러오는 중...';
