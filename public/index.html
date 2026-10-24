@@ -1635,6 +1635,7 @@
     // 사람이 탭을 눌렀을 때는 누른 탭 표시부터 먼저 화면에 보이게 하고, 무거운 그리기는 그다음에 한다
     if (defer && window.requestAnimationFrame) requestAnimationFrame(function () { setTimeout(paintView, 0); });
     else paintView();
+    if (window.__backSync) window.__backSync();
   }
   document.querySelectorAll('.segmented button').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -1659,6 +1660,44 @@
     var t0 = performance.now();
     setTimeout(function () { var t1 = performance.now(); if (t1 - t0 > 180) tapGuard.freezeEnd = t1; }, 0);
   }, true);
+
+  // ---------- 폰의 뒤로 가기 (안드로이드 뒤로 가기 단추, 아이폰 가장자리 밀기) ----------
+  //  · 상세·글쓰기·공유·관리·사진 크게 보기 같은 겹친 화면이 열려 있으면 → 오른쪽 위 ✕를 누른 것과 같게 한 겹 닫는다
+  //  · 열려 있는 화면이 없고 다른 탭이면 → "내 주변 검색" 탭으로 돌아간다
+  //  · 내 주변 검색에서 한 번 더 누르면 → 앱(브라우저)에서 나간다
+  // 화면이 열리거나 탭이 바뀔 때마다 브라우저 기록을 한 칸씩 쌓고, 닫히면 그만큼 되돌려서 개수를 맞춘다.
+  (function () {
+    var depth = 0, ignore = 0, timer = 0;
+    function overlays() { return Array.prototype.slice.call(document.querySelectorAll('#sheet-root > *, body > .lightbox')); }
+    function topOverlay() { return document.querySelector('body > .lightbox') || overlays().pop() || null; }
+    function want() { return overlays().length + (state.view !== 'map' ? 1 : 0); }
+    function reconcile() {
+      timer = 0;
+      var w = want();
+      try {
+        if (w > depth) { for (var i = depth; i < w; i++) history.pushState({ ts: 1 }, ''); depth = w; }
+        else if (w < depth) { var n = depth - w; depth = w; ignore++; history.go(-n); }
+      } catch (_) {}
+    }
+    function schedule() { if (!timer) timer = setTimeout(reconcile, 30); }
+    window.__backSync = schedule;
+    function closeTop(o) {
+      var x = o.querySelector('[data-close], .lb-close');
+      if (x) x.click(); else o.remove();
+    }
+    window.addEventListener('popstate', function () {
+      if (ignore > 0) { ignore--; return; }
+      var o = topOverlay();
+      if (depth > 0) depth--;
+      else if (!o && state.view === 'map') { try { history.back(); } catch (_) {} return; }   // 앱이 쌓지 않은 옛 기록이면 한 칸 더 뒤로
+      if (o) closeTop(o);
+      else if (state.view !== 'map') { var b = document.querySelector('.segmented [data-view="map"]'); if (b) b.click(); }
+      setTimeout(reconcile, 80);   // 닫히지 않았으면(작성 중 확인에서 '취소' 등) 기록 한 칸을 다시 쌓는다
+    });
+    var root = document.getElementById('sheet-root');
+    if (root) new MutationObserver(schedule).observe(root, { childList: true });
+    new MutationObserver(schedule).observe(document.body, { childList: true });
+  })();
 
   // ---------- 지역 선택 ----------
   document.querySelectorAll('[data-area]').forEach(function (sel) {
@@ -5025,8 +5064,8 @@
       document.querySelectorAll('[data-minimap]').forEach(function (b) { if (b.__map && b.__map.autoResize) b.__map.autoResize(); });
       if (state.mtnMap && state.mtnMap.autoResize) state.mtnMap.autoResize();
       if (!state.map || state.view !== 'map') return;
-      // 폴더블 폰을 접거나 펴서 화면 폭이 600px 기준을 넘나들면 내 주변 반경(15/30km)도 다시 맞춘다
-      if (state.mapLayers['내 주변'] && !state.poiMode && (window.innerWidth < 600 ? 15 : 30) !== NEAR_KM) { fixedMapBox = null; state.nearFit = true; renderMap(); return; }
+      // 폴더블 폰을 접거나 펴서 화면 폭이 600px 기준을 넘나들면 내 주변 반경(5/30km)도 다시 맞춘다
+      if (state.mapLayers['내 주변'] && !state.poiMode && (window.innerWidth < 600 ? 5 : 30) !== NEAR_KM) { fixedMapBox = null; state.nearFit = true; renderMap(); return; }
       if (state.mapHome) showWholeKorea();
       else { applyMapBox(koreaLayout()); fitMapBox(); } // 직접 옮긴 화면은 그대로 두고 상자 크기만 창에 맞춘다
     }, 200);
@@ -5598,9 +5637,9 @@
   }
 
   async function renderNearby(map, status, seq) {
-    // 휴대폰처럼 좁은 화면은 반경을 줄인다 (15km), 그 밖에는 30km
+    // 휴대폰처럼 좁은 화면은 반경을 줄인다 (5km), 그 밖에는 30km
     var mapEl = $('map');
-    NEAR_KM = window.innerWidth < 600 ? 15 : 30;
+    NEAR_KM = window.innerWidth < 600 ? 5 : 30;
     clearMarkers();
     state.nearMarkers = [];
     paintNearChips();
