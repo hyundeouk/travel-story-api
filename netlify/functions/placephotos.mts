@@ -4,7 +4,7 @@ import { getStore } from '@netlify/blobs';
 import { jsonResponse, corsPreflightResponse } from '../../src/lib/govApi.mts';
 
 // 장소(산 등)마다 사진을 여러 장 직접 더하고, 마음에 안 드는 공식 사진은 빼 두는 기록.
-//   { "<종류>:<id>": { add: [{ photoId } | { url }], hide: ["<빼 둔 사진 주소>", ...] } }
+//   { "<종류>:<id>": { add: [{ photoId } | { url }], hide: ["<빼 둔 사진 주소>", ...], hero: "<대표로 고른 사진 주소>" } }
 //  - add : 내가 올린 파일(photoId, /api/photos) 또는 웹 이미지 주소(url) — 순서대로 맨 앞에 보인다
 //  - hide: 산림청·관광공사 등에서 온 사진 중 보이지 않게 뺀 것의 주소 (원본은 그대로 두고 화면에서만 뺀다)
 const KEY = 'all';
@@ -14,8 +14,9 @@ const photos = () => getStore({ name: 'photos', consistency: 'strong' });
 const KEY_RE = /^[a-z]:[A-Za-z0-9_\-.:]{1,100}$/;
 const PHOTO_RE = /^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/;
 const URL_RE = /^https:\/\/[^\s"'<>]{4,1000}$/;
+const HERO_RE = /^(https:\/\/[^\s"'<>]{4,1000}|\/api\/photos\/[0-9a-f-]{36}\.(jpg|png|webp|gif)|\/img\/[^\s"'<>]{1,300}|\/api\/gphotos\/[^\s"'<>]{1,300})$/;
 
-async function readAll(): Promise<Record<string, { add: any[]; hide: string[] }>> {
+async function readAll(): Promise<Record<string, { add: any[]; hide: string[]; hero?: string }>> {
   const data = await store().get(KEY, { type: 'json' });
   return data && typeof data === 'object' && !Array.isArray(data) ? (data as any) : {};
 }
@@ -57,13 +58,23 @@ export default async (req: Request, _context: Context) => {
         const before = cur.add.length;
         cur.add = cur.add.filter((x: any) => !((photoId && x.photoId === photoId) || (url && x.url === url)));
         if (photoId && cur.add.length !== before && PHOTO_RE.test(photoId)) dropFile = photoId;
+        if (cur.hero && ((photoId && cur.hero === '/api/photos/' + photoId) || (url && cur.hero === url))) delete cur.hero;
       } else if (action === 'hide') {
         const url = typeof body.url === 'string' ? body.url.trim() : '';
         if (!/^(https:\/\/|\/img\/|\/api\/gphotos\/)[^\s"'<>]{2,1000}$/.test(url)) return jsonResponse({ error: 'bad url' }, { status: 400 });
         if (!cur.hide.includes(url)) cur.hide.push(url);
+        if (cur.hero === url) delete cur.hero;
         if (cur.hide.length > MAX_HIDE) cur.hide = cur.hide.slice(-MAX_HIDE);
       } else if (action === 'unhide') {
         cur.hide = [];                                  // 빼 둔 사진을 모두 다시 보이게
+      } else if (action === 'hero') {
+        // 대표 사진: 목록 맨 앞에 보이고 카드(목록)의 사진이 된다
+        const url = typeof body.url === 'string' ? body.url.trim() : '';
+        if (!HERO_RE.test(url)) return jsonResponse({ error: 'bad url' }, { status: 400 });
+        cur.hero = url;
+        cur.hide = cur.hide.filter((h) => h !== url);
+      } else if (action === 'unhero') {
+        delete cur.hero;
       } else if (action === 'makefirst') {
         const photoId = typeof body.photoId === 'string' ? body.photoId : '';
         const url = typeof body.url === 'string' ? body.url : '';
@@ -73,7 +84,7 @@ export default async (req: Request, _context: Context) => {
         return jsonResponse({ error: 'bad action' }, { status: 400 });
       }
 
-      if (!cur.add.length && !cur.hide.length) delete items[key]; else items[key] = cur;
+      if (!cur.add.length && !cur.hide.length && !cur.hero) delete items[key]; else items[key] = cur;
       await store().setJSON(KEY, items);
       if (dropFile) await photos().delete(dropFile);
       return jsonResponse({ ok: true, item: items[key] || null });

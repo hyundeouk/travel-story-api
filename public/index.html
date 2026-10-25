@@ -3646,10 +3646,10 @@
   // 장소마다 사진을 여러 장 더하고(add), 마음에 안 드는 공식 사진은 화면에서 빼 두는(hide) 기록
   var pphotos = {};
   var ppReady = authReady.then(function () { return api('placephotos', { quiet: true }); }).then(function (j) { pphotos = j.items || {}; }).catch(function () {});
-  function ppOf(key) { var p = key && pphotos[key]; return { add: (p && p.add) || [], hide: (p && p.hide) || [] }; }
+  function ppOf(key) { var p = key && pphotos[key]; return { add: (p && p.add) || [], hide: (p && p.hide) || [], hero: (p && p.hero) || null }; }
   function ppAddUrl(a) { return a.photoId ? photoUrl(a.photoId) : a.url; }
   function ppHidden(key, url) { return !!(key && url) && ppOf(key).hide.indexOf(url) >= 0; }
-  function ppFirst(key) { var a = ppOf(key).add[0]; return a ? ppAddUrl(a) : null; }
+  function ppFirst(key) { var o = ppOf(key); if (o.hero) return o.hero; var a = o.add[0]; return a ? ppAddUrl(a) : null; }   // 대표로 고른 사진 → 내가 넣은 첫 사진
   async function ppSave(body) {
     var r = await api('placephotos', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (r.item) pphotos[body.key] = r.item; else delete pphotos[body.key];
@@ -3923,7 +3923,7 @@
       thumb.querySelectorAll('img, svg, .trail-inset, .kmap-static').forEach(function (n) { n.remove(); });
       if (!thumb.querySelector('.card-ph')) thumb.insertAdjacentHTML('afterbegin', '<div class="card-ph">' + info.ph + '</div>');
       await customReady; await ppReady;
-      if (await loadImg(thumb, card, customUrl(view.key) || ppFirst(view.key))) return;
+      if (await loadImg(thumb, card, (ppOf(view.key).hero) || customUrl(view.key) || ppFirst(view.key))) return;
       return card.__default();
     };
     whenVisible(card, card.__paint);
@@ -4439,7 +4439,7 @@
           lines.filter(function (l) { return l[1]; }).map(function (l) { return '<div class="card-line"><b>' + escapeHtml(l[0]) + ':</b> ' + escapeHtml(l[1]) + '</div>'; }).join('') +
         '</div>' +
       '</div>');
-    whenVisible(card, function () { return ppReady.then(function () { return setThumb(card, { hero: view.key ? (customUrl(view.key) || ppFirst(view.key)) : null, url: ppHidden(view.key, view.image) ? null : (view.image || null), q: view.title, lat: view.lat, lng: view.lng, wiki: true, addr: view.place, noSearch: !!generic }); }); });
+    whenVisible(card, function () { return ppReady.then(function () { return setThumb(card, { hero: view.key ? (ppOf(view.key).hero || customUrl(view.key) || ppFirst(view.key)) : null, url: ppHidden(view.key, view.image) ? null : (view.image || null), q: view.title, lat: view.lat, lng: view.lng, wiki: true, addr: view.place, noSearch: !!generic }); }); });
     card.addEventListener('click', function () { openPlaceDetail(cat, view); });
     return markFix(card, cat, view);
   }
@@ -7669,6 +7669,7 @@
     async function put(body) {
       var r = await api('customimages', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (r.item) custom[pkey] = r.item; else delete custom[pkey];
+      if (ppOf(pkey).hero) { try { await ppSave({ key: pkey, action: 'unhero' }); } catch (_) {} }   // 방금 정한 사진이 대표가 되도록
       if (view.card && view.card.isConnected && view.card.__paint) view.card.__paint();
       close(true);
     }
@@ -8548,7 +8549,7 @@
                 '<div class="pd-thumbs" data-thumbs hidden></div>' +
                 (view.key && state.auth && state.auth.canEdit ? '<div class="pd-photo-tools"><button type="button" class="link-btn" data-addphotos>＋ 사진 추가</button><button type="button" class="link-btn danger-line" data-delphoto hidden>🗑 이 사진 빼기</button><button type="button" class="link-btn" data-restorephotos hidden>빼 둔 사진 다시 보기</button></div>' : '') +
                 (view.key ? '<button type="button" class="link-btn" data-setphoto>' + (customUrl(view.key) ? '대표 사진 바꾸기' : '대표 사진 등록') + '</button>' : '') +
-                (view.key ? '<button type="button" class="link-btn" data-sethero hidden>⭐ 이 사진을 대표로</button>' : '') +
+                (view.key && state.auth && state.auth.canEdit ? '<button type="button" class="link-btn" data-sethero hidden>⭐ 이 사진을 대표로</button>' : '') +
               '</div>' +
               '<div class="pd-info">' +
                 '<h3>기본 정보</h3>' +
@@ -8809,6 +8810,7 @@
         }
       }
       if (heroUrl && (heroUrl === customUrl(view.key) || !ppHidden(view.key, heroUrl))) await promoteHero(heroUrl);
+      if (ppMine.hero) await promoteHero(ppMine.hero);   // 내가 '대표로' 고른 사진이 맨 앞
       if (!photos.length && hasCoord) await showPlaceMap();
     })();
     // 사진이 하나도 없으면 그 자리에 장소 위치 지도(카카오 지도)를 보여준다.
@@ -8844,16 +8846,17 @@
     var heroBtn = sheet.querySelector('[data-sethero]');
     if (heroBtn) heroBtn.addEventListener('click', async function () {
       var p = photos[cur];
-      if (!p || !/^https:\/\//.test(p.url)) return;
+      if (!p) return;
       heroBtn.disabled = true;
       heroBtn.textContent = '저장 중...';
       try {
-        var r = await api('customimages', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: view.key, url: p.url }) });
-        if (r.item) custom[view.key] = r.item;
+        await ppSave({ key: view.key, action: 'hero', url: p.url });   // 파일로 올린 사진이든 웹 사진이든 같은 방법
         await promoteHero(p.url);
         if (view.card && view.card.isConnected && view.card.__paint) view.card.__paint();
         heroBtn.textContent = '⭐ 이 사진을 대표로';
+        showToast('대표 사진으로 정했어요');
       } catch (err) {
+        console.warn('[photo] hero failed', err);
         heroBtn.textContent = '저장하지 못했어요 · 다시 누르기';
       }
       heroBtn.disabled = false;

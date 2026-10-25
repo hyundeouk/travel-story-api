@@ -2567,6 +2567,7 @@ var photos2 = () => getStore({ name: "photos", consistency: "strong" });
 var KEY_RE2 = /^[a-z]:[A-Za-z0-9_\-.:]{1,100}$/;
 var PHOTO_RE2 = /^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/;
 var URL_RE = /^https:\/\/[^\s"'<>]{4,1000}$/;
+var HERO_RE = /^(https:\/\/[^\s"'<>]{4,1000}|\/api\/photos\/[0-9a-f-]{36}\.(jpg|png|webp|gif)|\/img\/[^\s"'<>]{1,300}|\/api\/gphotos\/[^\s"'<>]{1,300})$/;
 async function readAll2() {
   const data = await store4().get(KEY3, { type: "json" });
   return data && typeof data === "object" && !Array.isArray(data) ? data : {};
@@ -2605,13 +2606,22 @@ var placephotos_default = async (req, _context) => {
         const before = cur.add.length;
         cur.add = cur.add.filter((x) => !(photoId && x.photoId === photoId || url && x.url === url));
         if (photoId && cur.add.length !== before && PHOTO_RE2.test(photoId)) dropFile = photoId;
+        if (cur.hero && (photoId && cur.hero === "/api/photos/" + photoId || url && cur.hero === url)) delete cur.hero;
       } else if (action === "hide") {
         const url = typeof body.url === "string" ? body.url.trim() : "";
         if (!/^(https:\/\/|\/img\/|\/api\/gphotos\/)[^\s"'<>]{2,1000}$/.test(url)) return jsonResponse({ error: "bad url" }, { status: 400 });
         if (!cur.hide.includes(url)) cur.hide.push(url);
+        if (cur.hero === url) delete cur.hero;
         if (cur.hide.length > MAX_HIDE) cur.hide = cur.hide.slice(-MAX_HIDE);
       } else if (action === "unhide") {
         cur.hide = [];
+      } else if (action === "hero") {
+        const url = typeof body.url === "string" ? body.url.trim() : "";
+        if (!HERO_RE.test(url)) return jsonResponse({ error: "bad url" }, { status: 400 });
+        cur.hero = url;
+        cur.hide = cur.hide.filter((h) => h !== url);
+      } else if (action === "unhero") {
+        delete cur.hero;
       } else if (action === "makefirst") {
         const photoId = typeof body.photoId === "string" ? body.photoId : "";
         const url = typeof body.url === "string" ? body.url : "";
@@ -2620,7 +2630,7 @@ var placephotos_default = async (req, _context) => {
       } else {
         return jsonResponse({ error: "bad action" }, { status: 400 });
       }
-      if (!cur.add.length && !cur.hide.length) delete items[key];
+      if (!cur.add.length && !cur.hide.length && !cur.hero) delete items[key];
       else items[key] = cur;
       await store4().setJSON(KEY3, items);
       if (dropFile) await photos2().delete(dropFile);
