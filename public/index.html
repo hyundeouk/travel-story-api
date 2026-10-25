@@ -615,6 +615,10 @@
   .admin-pane { min-width: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 4px 14px 14px; }
   .embed-pane .sheet-head, .embed-pane .page-head { display: none; }
   .embed-pane .page-body, .embed-pane .page-sec { padding-left: 0; padding-right: 0; }
+  /* 공유·관리 오른쪽 칸 안의 내용은 따로 스크롤하지 않고 바깥 창이 한 번에 스크롤한다(휠이 안쪽 칸에 막히지 않게) */
+  .embed-pane .page-body { flex: none; overflow: visible; overscroll-behavior: auto; }
+  /* 창이 열려 있는 동안은 뒤쪽 화면의 스크롤 막대를 없앤다(막대가 두 개로 보이던 문제) */
+  html:has(body.no-scroll) { overflow: hidden; }
   @media (max-width: 760px) {
     .admin-split { grid-template-columns: 1fr; gap: 10px; }
     .admin-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); position: static; gap: 6px; }
