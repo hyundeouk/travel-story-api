@@ -6927,6 +6927,28 @@
     }
     return job;
   }
+  // 앱을 한참(5분 넘게) 숨겼다가 다시 열면, '내 위치 기준' 화면(내 주변 검색 지도·맛집·내 위치 날씨)은
+  // 예전 위치·옛 검색 자리를 버리고 지금 내 위치로 다시 맞춘다. 내 위치와 상관없는 지도(산·골프·상세 지도·검색한 곳 날씨)는 그대로 둔다.
+  var hiddenAt = 0, RESUME_MS = 5 * 60 * 1000;
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+    if (!hiddenAt || Date.now() - hiddenAt < RESUME_MS) return;
+    hiddenAt = 0;
+    geoTried = false; geo.at = 0;                       // 위치를 새로 받게 한다
+    var nearMap = state.view === 'map' && state.mapLayers && state.mapLayers['내 주변'];
+    var food = state.view === 'food';
+    var mineWx = state.view === 'weather' && !(typeof wxTab !== 'undefined' && wxTab.picked);
+    if (nearMap) { state.nearFit = true; state.nearPos = null; }
+    if (food) state.nearPos = null;
+    locate().then(function (pos) {
+      if (!pos) return;
+      state.nearPos = pos;
+      if (document.querySelector('#sheet-root .sheet-backdrop')) return;     // 상세 창이 열려 있으면 닫을 때까지 건드리지 않는다
+      if (nearMap && state.view === 'map' && typeof renderMap === 'function') renderMap();
+      else if (food && state.view === 'food' && typeof renderFood === 'function') renderFood();
+      else if (mineWx && state.view === 'weather' && typeof renderWeatherTab === 'function') renderWeatherTab(true);
+    }).catch(function () {});
+  });
   function meIcon() {
     return naver.maps.Point ? { content: '<div class="me-dot" title="내 위치"></div>', anchor: new naver.maps.Point(9, 9) } : undefined;
   }
