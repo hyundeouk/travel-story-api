@@ -3618,6 +3618,7 @@
   function loadImg(thumb, card, url, referrer) {
     return new Promise(function (resolve) {
       if (!url || !/^(https:\/\/|\/api\/photos\/|\/api\/gphotos\/|\/img\/)/.test(url)) return resolve(false);
+      if (card && card.__ppkey && ppHidden(card.__ppkey, url)) return resolve(false);   // 상세에서 '빼 둔' 사진은 목록 카드에도 쓰지 않는다
       var img = document.createElement('img');
       img.alt = '';
       if (!referrer) img.referrerPolicy = 'no-referrer';
@@ -3857,7 +3858,7 @@
     if (o.wiki && o.lat != null) {
       var w = await wikiLookup({ title: o.q, lat: o.lat, lng: o.lng, place: o.addr });
       var wi = w && w.images && w.images[0];
-      if (wi && (await loadImg(thumb, card, wi.thumb || wi.url))) {
+      if (wi && !(card.__ppkey && ppHidden(card.__ppkey, wi.url)) && (await loadImg(thumb, card, wi.thumb || wi.url))) {
         var im = thumb.querySelector('img'); if (im) im.title = '사진: ' + wikiCredit(wi);
         return;
       }
@@ -3918,6 +3919,7 @@
     };
     marksReady.then(card.__mark);
     // 그림을 다시 그릴 때(사진 등록·삭제 후) 쓰는 함수
+    card.__ppkey = view.key;
     card.__paint = async function () {
       var thumb = card.querySelector('.card-thumb');
       thumb.querySelectorAll('img, svg, .trail-inset, .kmap-static').forEach(function (n) { n.remove(); });
@@ -4439,6 +4441,7 @@
           lines.filter(function (l) { return l[1]; }).map(function (l) { return '<div class="card-line"><b>' + escapeHtml(l[0]) + ':</b> ' + escapeHtml(l[1]) + '</div>'; }).join('') +
         '</div>' +
       '</div>');
+    card.__ppkey = view.key;
     whenVisible(card, function () { return ppReady.then(function () { return setThumb(card, { hero: view.key ? (ppOf(view.key).hero || customUrl(view.key) || ppFirst(view.key)) : null, url: ppHidden(view.key, view.image) ? null : (view.image || null), q: view.title, lat: view.lat, lng: view.lng, wiki: true, addr: view.place, noSearch: !!generic }); }); });
     card.addEventListener('click', function () { openPlaceDetail(cat, view); });
     return markFix(card, cat, view);
