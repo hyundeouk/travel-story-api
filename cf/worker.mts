@@ -29,6 +29,7 @@ const realFetch = globalThis.fetch.bind(globalThis);
 import fn_attractions, { config as cfg_attractions } from '../netlify/functions/attractions.mts';
 import fn_auth, { config as cfg_auth } from '../netlify/functions/auth.mts';
 import fn_customimages, { config as cfg_customimages } from '../netlify/functions/customimages.mts';
+import fn_placephotos, { config as cfg_placephotos } from '../netlify/functions/placephotos.mts';
 import fn_debug, { config as cfg_debug } from '../netlify/functions/debug.mts';
 import fn_festivals, { config as cfg_festivals } from '../netlify/functions/festivals.mts';
 import fn_forest, { config as cfg_forest } from '../netlify/functions/forest.mts';
@@ -68,6 +69,7 @@ for (const [fn, cfg] of [
   [fn_attractions, cfg_attractions],
   [fn_auth, cfg_auth],
   [fn_customimages, cfg_customimages],
+  [fn_placephotos, cfg_placephotos],
   [fn_debug, cfg_debug],
   [fn_festivals, cfg_festivals],
   [fn_forest, cfg_forest],

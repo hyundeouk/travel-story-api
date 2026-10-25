@@ -1728,8 +1728,8 @@ function hash(k) {
   }
   return h >>> 0;
 }
-function dbFor(store13, key) {
-  return PHOTO_STORES.has(store13) && SHARDS.length ? SHARDS[hash(key) % SHARDS.length] : MAIN;
+function dbFor(store14, key) {
+  return PHOTO_STORES.has(store14) && SHARDS.length ? SHARDS[hash(key) % SHARDS.length] : MAIN;
 }
 var CACHE_DAYS = 14;
 var PART = 1e6;
@@ -1741,14 +1741,14 @@ function toBytes(v) {
   if (ArrayBuffer.isView(v)) return { bytes: new Uint8Array(v.buffer, v.byteOffset, v.byteLength), ctype: "bin" };
   return { bytes: te.encode(String(v)), ctype: "text" };
 }
-async function readRows(db, store13, key) {
-  const r = await db.prepare("SELECT part, data, meta, ctype FROM blobs WHERE store=?1 AND key=?2 ORDER BY part").bind(store13, key).all();
+async function readRows(db, store14, key) {
+  const r = await db.prepare("SELECT part, data, meta, ctype FROM blobs WHERE store=?1 AND key=?2 ORDER BY part").bind(store14, key).all();
   return r.results || [];
 }
-async function readRaw(store13, key) {
-  const db = dbFor(store13, key);
-  let rows = await readRows(db, store13, key);
-  if (!rows.length && db !== MAIN) rows = await readRows(MAIN, store13, key);
+async function readRaw(store14, key) {
+  const db = dbFor(store14, key);
+  let rows = await readRows(db, store14, key);
+  if (!rows.length && db !== MAIN) rows = await readRows(MAIN, store14, key);
   if (!rows.length) return null;
   const chunks = rows.map((x) => x.data instanceof ArrayBuffer ? new Uint8Array(x.data) : new Uint8Array(x.data));
   const total = chunks.reduce((n, c) => n + c.length, 0);
@@ -1765,17 +1765,17 @@ async function readRaw(store13, key) {
   }
   return { bytes, ctype: rows[0].ctype || "text", meta };
 }
-async function writeRaw(store13, key, bytes, ctype, meta) {
-  const DB = dbFor(store13, key);
-  if (DB !== MAIN) await MAIN.prepare("DELETE FROM blobs WHERE store=?1 AND key=?2").bind(store13, key).run();
-  const stmts = [DB.prepare("DELETE FROM blobs WHERE store=?1 AND key=?2").bind(store13, key)];
+async function writeRaw(store14, key, bytes, ctype, meta) {
+  const DB = dbFor(store14, key);
+  if (DB !== MAIN) await MAIN.prepare("DELETE FROM blobs WHERE store=?1 AND key=?2").bind(store14, key).run();
+  const stmts = [DB.prepare("DELETE FROM blobs WHERE store=?1 AND key=?2").bind(store14, key)];
   const metaStr = JSON.stringify(meta || {});
   const n = Math.max(1, Math.ceil(bytes.length / PART));
   for (let i = 0; i < n; i++) {
-    stmts.push(DB.prepare("INSERT INTO blobs (store, key, part, data, meta, ctype, updated) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(store13, key, i, bytes.slice(i * PART, (i + 1) * PART), metaStr, ctype, Date.now()));
+    stmts.push(DB.prepare("INSERT INTO blobs (store, key, part, data, meta, ctype, updated) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(store14, key, i, bytes.slice(i * PART, (i + 1) * PART), metaStr, ctype, Date.now()));
   }
   await DB.batch(stmts);
-  if (store13 === "cache" && Math.random() < 0.02) {
+  if (store14 === "cache" && Math.random() < 0.02) {
     try {
       await MAIN.prepare("DELETE FROM blobs WHERE store='cache' AND updated < ?1").bind(Date.now() - CACHE_DAYS * 864e5).run();
     } catch {
@@ -2558,6 +2558,83 @@ var config3 = {
   path: "/api/customimages"
 };
 
+// ../netlify/functions/placephotos.mts
+var KEY3 = "all";
+var MAX_ADD = 30;
+var MAX_HIDE = 80;
+var store4 = () => getStore({ name: "placephotos", consistency: "strong" });
+var photos2 = () => getStore({ name: "photos", consistency: "strong" });
+var KEY_RE2 = /^[a-z]:[A-Za-z0-9_\-.:]{1,100}$/;
+var PHOTO_RE2 = /^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/;
+var URL_RE = /^https:\/\/[^\s"'<>]{4,1000}$/;
+async function readAll2() {
+  const data = await store4().get(KEY3, { type: "json" });
+  return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+}
+var placephotos_default = async (req, _context) => {
+  if (req.method === "OPTIONS") return corsPreflightResponse();
+  const denied = await guard(req);
+  if (denied) return denied;
+  try {
+    if (req.method === "GET") {
+      const items = await readAll2();
+      return jsonResponse({ items, count: Object.keys(items).length });
+    }
+    if (req.method === "PUT") {
+      const body = await req.json();
+      const key = typeof body?.key === "string" ? body.key : "";
+      if (!KEY_RE2.test(key)) return jsonResponse({ error: "bad key" }, { status: 400 });
+      const action = String(body?.action || "");
+      const items = await readAll2();
+      const cur = items[key] || { add: [], hide: [] };
+      cur.add = Array.isArray(cur.add) ? cur.add : [];
+      cur.hide = Array.isArray(cur.hide) ? cur.hide : [];
+      let dropFile = "";
+      if (action === "add") {
+        const photoId = typeof body.photoId === "string" && PHOTO_RE2.test(body.photoId) ? body.photoId : null;
+        const url = typeof body.url === "string" && URL_RE.test(body.url.trim()) ? body.url.trim() : null;
+        if (!photoId && !url) return jsonResponse({ error: "bad photo" }, { status: 400 });
+        if (cur.add.length >= MAX_ADD) return jsonResponse({ error: "too many photos" }, { status: 409 });
+        const entry = photoId ? { photoId } : { url };
+        if (typeof body.desc === "string" && body.desc.trim()) entry.desc = body.desc.trim().slice(0, 80);
+        if (!cur.add.some((x) => photoId && x.photoId === photoId || url && x.url === url)) cur.add.push(entry);
+        if (url) cur.hide = cur.hide.filter((h) => h !== url);
+      } else if (action === "remove") {
+        const photoId = typeof body.photoId === "string" ? body.photoId : "";
+        const url = typeof body.url === "string" ? body.url : "";
+        const before = cur.add.length;
+        cur.add = cur.add.filter((x) => !(photoId && x.photoId === photoId || url && x.url === url));
+        if (photoId && cur.add.length !== before && PHOTO_RE2.test(photoId)) dropFile = photoId;
+      } else if (action === "hide") {
+        const url = typeof body.url === "string" ? body.url.trim() : "";
+        if (!/^(https:\/\/|\/img\/|\/api\/gphotos\/)[^\s"'<>]{2,1000}$/.test(url)) return jsonResponse({ error: "bad url" }, { status: 400 });
+        if (!cur.hide.includes(url)) cur.hide.push(url);
+        if (cur.hide.length > MAX_HIDE) cur.hide = cur.hide.slice(-MAX_HIDE);
+      } else if (action === "unhide") {
+        cur.hide = [];
+      } else if (action === "makefirst") {
+        const photoId = typeof body.photoId === "string" ? body.photoId : "";
+        const url = typeof body.url === "string" ? body.url : "";
+        const i = cur.add.findIndex((x) => photoId && x.photoId === photoId || url && x.url === url);
+        if (i > 0) cur.add.unshift(cur.add.splice(i, 1)[0]);
+      } else {
+        return jsonResponse({ error: "bad action" }, { status: 400 });
+      }
+      if (!cur.add.length && !cur.hide.length) delete items[key];
+      else items[key] = cur;
+      await store4().setJSON(KEY3, items);
+      if (dropFile) await photos2().delete(dropFile);
+      return jsonResponse({ ok: true, item: items[key] || null });
+    }
+    return jsonResponse({ error: "method not allowed" }, { status: 405 });
+  } catch (err) {
+    return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
+  }
+};
+var config4 = {
+  path: "/api/placephotos"
+};
+
 // ../netlify/functions/debug.mts
 var debug_default = async (req, _context) => {
   if (req.method === "OPTIONS") return corsPreflightResponse();
@@ -2576,7 +2653,7 @@ var debug_default = async (req, _context) => {
     NAVER_SEARCH_SECRET: check("NAVER_SEARCH_SECRET")
   });
 };
-var config4 = {
+var config5 = {
   path: "/api/debug"
 };
 
@@ -2646,7 +2723,7 @@ var festivals_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config5 = {
+var config6 = {
   path: "/api/festivals"
 };
 
@@ -3015,7 +3092,7 @@ var forest_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config6 = {
+var config7 = {
   path: "/api/forest"
 };
 
@@ -3059,8 +3136,8 @@ var golf_default = async (req, _context) => {
   if (denied) return denied;
   const share = await viewerShare(req);
   if (share && !share.tabs.golf) return jsonResponse({ items: [], total: 0, located: 0, pending: 0, hidden: true });
-  const store13 = getStore("cache");
-  const full = await store13.get("golf-v1", { type: "json" });
+  const store14 = getStore("cache");
+  const full = await store14.get("golf-v1", { type: "json" });
   if (full && Date.now() - (full.at || 0) < TTL_MS3) return jsonResponse({ ...full, cached: true });
   const key = Netlify.env.get("GOLF_API_KEY") || Netlify.env.get("TOUR_API_KEY") || FALLBACK_KEY4;
   const res = await fetch(`${GOLF_API}?page=1&perPage=2000&serviceKey=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(1e4) });
@@ -3106,7 +3183,7 @@ var golf_default = async (req, _context) => {
       const g = base[idx++];
       const q = cleanAddress(g.address);
       const gKey = `geo-v1-${await sha1(g.name + "|" + q)}`;
-      let hit = await store13.get(gKey, { type: "json" });
+      let hit = await store14.get(gKey, { type: "json" });
       if (!hit) {
         if (Date.now() - started > TIME_BUDGET_MS) {
           pending++;
@@ -3124,7 +3201,7 @@ var golf_default = async (req, _context) => {
           }
           if (!ll) ll = await findByName(g.name, g.sido, key);
           hit = ll ? { lat: r5(ll[0]), lng: r5(ll[1]) } : { none: true };
-          await store13.setJSON(gKey, hit);
+          await store14.setJSON(gKey, hit);
         } catch {
           pending++;
           items.push(g);
@@ -3141,10 +3218,10 @@ var golf_default = async (req, _context) => {
   await Promise.all(Array.from({ length: 8 }, worker));
   items.sort((a, b) => a.order - b.order);
   const out = { at: Date.now(), total: items.length, located: items.filter((x) => x.lat != null).length, pending, geocoder: secret ? "naver" : "tour-only", items };
-  if (!pending) await store13.setJSON("golf-v1", out);
+  if (!pending) await store14.setJSON("golf-v1", out);
   return jsonResponse(out, { headers: { "Cache-Control": "no-store" } });
 };
-var config7 = {
+var config8 = {
   path: "/api/golf"
 };
 
@@ -3217,10 +3294,10 @@ var golfosm_default = async (req, _context) => {
   if (!(lat > 32 && lat < 39.5 && lng > 124 && lng < 132)) return jsonResponse({ error: "bad lat/lng" }, { status: 400 });
   const name = (q.get("name") || "").slice(0, 40);
   const debug = q.get("debug") === "1";
-  const store13 = getStore("cache");
+  const store14 = getStore("cache");
   const cKey = `gosm-v1-${lat.toFixed(3)},${lng.toFixed(3)}`;
   if (!debug) {
-    const hit = await store13.get(cKey, { type: "json" });
+    const hit = await store14.get(cKey, { type: "json" });
     if (hit && Date.now() - (hit.at || 0) < (hit.none ? TTL_NONE_MS : TTL_MS4)) return jsonResponse({ ...hit, cached: true });
   }
   try {
@@ -3256,18 +3333,18 @@ var golfosm_default = async (req, _context) => {
       holes
     };
     if (!out.course && !holes.length) out.none = true;
-    if (!debug) await store13.setJSON(cKey, out);
+    if (!debug) await store14.setJSON(cKey, out);
     return jsonResponse(out);
   } catch (err) {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config8 = {
+var config9 = {
   path: "/api/golfosm"
 };
 
 // ../netlify/functions/glog.mts
-var store4 = () => getStore({ name: "glog", consistency: "strong" });
+var store5 = () => getStore({ name: "glog", consistency: "strong" });
 var MAX_ERRORS = 40;
 var MAX_DEVICES = 4;
 var MAX_USAGE_KEYS = 120;
@@ -3287,7 +3364,7 @@ var num2 = (v, max) => {
   return Number.isFinite(x) && x > 0 ? Math.min(x, max) : 0;
 };
 async function readMeta() {
-  return await store4().get("meta", { type: "json" }) || { unread: 0, lastErrAt: 0 };
+  return await store5().get("meta", { type: "json" }) || { unread: 0, lastErrAt: 0 };
 }
 var glog_default = async (req, _context) => {
   try {
@@ -3299,11 +3376,11 @@ var glog_default = async (req, _context) => {
         const m2 = await readMeta();
         return reply2({ ok: true, unread: m2.unread || 0, lastErrAt: m2.lastErrAt || 0 });
       }
-      const keys = (await store4().list({ prefix: "u-" })).blobs.map((b) => b.key);
+      const keys = (await store5().list({ prefix: "u-" })).blobs.map((b) => b.key);
       keys.push("anon");
       const logs = [];
       for (const k of keys) {
-        const g2 = await store4().get(k, { type: "json" });
+        const g2 = await store5().get(k, { type: "json" });
         if (g2) logs.push(g2);
       }
       logs.sort((x, y) => (y.last || 0) - (x.last || 0));
@@ -3319,53 +3396,53 @@ var glog_default = async (req, _context) => {
     }
     if (body?.action === "anondel" || body?.action === "anonclear") {
       if (!a.canEdit) return reply2({ error: "edit not allowed" }, 403);
-      const g2 = await store4().get("anon", { type: "json" });
+      const g2 = await store5().get("anon", { type: "json" });
       if (g2) {
-        if (body.action === "anonclear") await store4().delete("anon");
+        if (body.action === "anonclear") await store5().delete("anon");
         else {
           const did = String(body.did || "");
           g2.anonDevs = anonList(g2).filter((d) => d.id !== did);
           g2.devices = (g2.devices || []).filter((d) => g2.anonDevs.some((x) => x.name === d.name));
-          await store4().setJSON("anon", g2);
+          await store5().setJSON("anon", g2);
         }
       }
       let unread = 0;
-      for (const k of (await store4().list({ prefix: "u-" })).blobs.map((b) => b.key).concat(["anon"])) {
-        const x = await store4().get(k, { type: "json" });
+      for (const k of (await store5().list({ prefix: "u-" })).blobs.map((b) => b.key).concat(["anon"])) {
+        const x = await store5().get(k, { type: "json" });
         if (x) unread += x.unread || 0;
       }
       const m = await readMeta();
       m.unread = unread;
-      await store4().setJSON("meta", m);
+      await store5().setJSON("meta", m);
       return reply2({ ok: true, unread });
     }
     if (body?.action === "seen" || body?.action === "clear") {
       if (!a.canEdit) return reply2({ error: "edit not allowed" }, 403);
-      const keys = body.action === "clear" ? [String(body.id || "")] : (await store4().list({ prefix: "u-" })).blobs.map((b) => b.key).concat(["anon"]);
+      const keys = body.action === "clear" ? [String(body.id || "")] : (await store5().list({ prefix: "u-" })).blobs.map((b) => b.key).concat(["anon"]);
       for (const k of keys) {
         if (!/^(u-[0-9a-f]{16}|anon)$/.test(k)) continue;
-        const g2 = await store4().get(k, { type: "json" });
+        const g2 = await store5().get(k, { type: "json" });
         if (!g2) continue;
         if (body.action === "clear") g2.errors = [];
         g2.unread = 0;
-        await store4().setJSON(k, g2);
+        await store5().setJSON(k, g2);
       }
-      const all = (await store4().list({ prefix: "u-" })).blobs.map((b) => b.key).concat(["anon"]);
+      const all = (await store5().list({ prefix: "u-" })).blobs.map((b) => b.key).concat(["anon"]);
       let unread = 0;
       if (body.action === "clear") for (const k of all) {
-        const g2 = await store4().get(k, { type: "json" });
+        const g2 = await store5().get(k, { type: "json" });
         if (g2) unread += g2.unread || 0;
       }
       const m = await readMeta();
       m.unread = unread;
-      await store4().setJSON("meta", m);
+      await store5().setJSON("meta", m);
       return reply2({ ok: true, unread });
     }
     if (a.canEdit) return reply2({ ok: true, skip: true });
     if (!a.linkOk || a.blocked) return reply2({ error: "link required" }, 401);
     const key = a.guest ? "u-" + a.guest.id : "anon";
     const now = Date.now();
-    const g = await store4().get(key, { type: "json" }) || {
+    const g = await store5().get(key, { type: "json" }) || {
       id: a.guest ? a.guest.id : "anon",
       nick: a.guest ? a.guest.nickname : "\uB85C\uADF8\uC778 \uC804 \uBC29\uBB38\uC790",
       first: now,
@@ -3434,19 +3511,19 @@ var glog_default = async (req, _context) => {
       d.errs = (d.errs || 0) + added;
       g.anonDevs = list.sort((x, y) => y.last - x.last).slice(0, MAX_ANON_DEVS);
     }
-    await store4().setJSON(key, g);
+    await store5().setJSON(key, g);
     if (added) {
       const m = await readMeta();
       m.unread = (m.unread || 0) + added;
       m.lastErrAt = now;
-      await store4().setJSON("meta", m);
+      await store5().setJSON("meta", m);
     }
     return reply2({ ok: true });
   } catch (e) {
     return reply2({ error: "failed" }, 500);
   }
 };
-var config9 = {
+var config10 = {
   path: "/api/glog"
 };
 
@@ -3455,7 +3532,7 @@ var EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 var TYPE = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" };
 var ID_RE = /^[0-9a-f-]{36}\.(jpg|png|webp)$/;
 var MAX_BYTES = 3 * 1024 * 1024;
-var store5 = () => getStore({ name: "gphotos", consistency: "strong" });
+var store6 = () => getStore({ name: "gphotos", consistency: "strong" });
 async function sha2562(text3) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text3));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -3481,12 +3558,12 @@ var gphotos_default = async (req, context) => {
       if (body.byteLength > MAX_BYTES) return jsonResponse({ error: "image too large" }, { status: 413 });
       const newId = `${crypto.randomUUID()}.${ext}`;
       const author = a.guest ? await sha2562("gs|acct|" + a.guest.id) : token ? await sha2562("gs|" + token) : "owner";
-      await store5().set(newId, body, { metadata: { author, at: Date.now() } });
+      await store6().set(newId, body, { metadata: { author, at: Date.now() } });
       return jsonResponse({ id: newId }, { status: 201 });
     }
     if (req.method === "GET" && id) {
       if (!ID_RE.test(id)) return jsonResponse({ error: "not found" }, { status: 404 });
-      const data = await store5().get(id, { type: "arrayBuffer" });
+      const data = await store6().get(id, { type: "arrayBuffer" });
       if (!data) return jsonResponse({ error: "not found" }, { status: 404 });
       return new Response(data, { headers: { "content-type": TYPE[id.split(".").pop()], "cache-control": "private, max-age=31536000, immutable" } });
     }
@@ -3495,7 +3572,7 @@ var gphotos_default = async (req, context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config10 = {
+var config11 = {
   path: ["/api/gphotos", "/api/gphotos/:id"]
 };
 
@@ -3570,9 +3647,9 @@ function cleanHike(input) {
 }
 
 // ../netlify/functions/gstories.mts
-var store6 = () => getStore({ name: "gstories", consistency: "strong" });
+var store7 = () => getStore({ name: "gstories", consistency: "strong" });
 var gphotos = () => getStore({ name: "gphotos", consistency: "strong" });
-var PHOTO_RE2 = /^[0-9a-f-]{36}\.(jpg|png|webp)$/;
+var PHOTO_RE3 = /^[0-9a-f-]{36}\.(jpg|png|webp)$/;
 var MAX_PHOTOS = 10;
 var STATUSES = ["ok", "pending", "hidden"];
 var str4 = (v, max) => typeof v === "string" ? v.replace(/\s+$/g, "").trim().slice(0, max) : "";
@@ -3584,7 +3661,7 @@ async function sha2563(text3) {
 function clean(input) {
   const photoIds = [];
   for (const id of Array.isArray(input?.photoIds) ? input.photoIds : []) {
-    if (typeof id === "string" && PHOTO_RE2.test(id) && !photoIds.includes(id)) photoIds.push(id);
+    if (typeof id === "string" && PHOTO_RE3.test(id) && !photoIds.includes(id)) photoIds.push(id);
     if (photoIds.length >= MAX_PHOTOS) break;
   }
   const lat = num4(input?.lat), lng = num4(input?.lng);
@@ -3631,7 +3708,7 @@ var gstories_default = async (req, context) => {
   const acct = a.guest ? await sha2563("gs|acct|" + a.guest.id) : "";
   const isMine = (g) => !!author && g.author === author || !!acct && g.author === acct;
   const id = context.params?.id;
-  const s = store6();
+  const s = store7();
   try {
     if (req.method === "GET") {
       const { blobs } = await s.list({ prefix: "s-" });
@@ -3692,7 +3769,7 @@ var gstories_default = async (req, context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config11 = {
+var config12 = {
   path: ["/api/gstories", "/api/gstories/:id"]
 };
 
@@ -3882,8 +3959,8 @@ var heritage_default = async (req, _context) => {
       const areaCode = q.get("areaCode") || "";
       if (!/^\d{2}$/.test(kind) || !/^\d{1,2}$/.test(areaCode)) return jsonResponse({ error: "bad request" }, { status: 400 });
       const key = `hlist-v1-${kind}-${areaCode}`;
-      const store13 = getStore("cache");
-      const hit = await store13.get(key, { type: "json" });
+      const store14 = getStore("cache");
+      const hit = await store14.get(key, { type: "json" });
       if (hit && Date.now() - (hit.at || 0) < 30 * 24 * 3600 * 1e3) return jsonResponse({ ...hit, cached: true });
       const first = await fetchHeritageList({ kind, areaCode, page: 1 });
       const pages = Math.min(15, Math.ceil((first.total || 0) / first.pageUnit));
@@ -3891,7 +3968,7 @@ var heritage_default = async (req, _context) => {
       const failed = rest.some((r) => r.failed);
       const items = first.items.concat(...rest.map((r) => r.items)).filter((it) => it.lat != null && it.lng != null);
       const out = { at: Date.now(), kind, kindName: first.kindName, areaCode, total: first.total, items };
-      if (!failed) await store13.setJSON(key, out);
+      if (!failed) await store14.setJSON(key, out);
       return jsonResponse(out);
     }
     const result = await fetchHeritageList({
@@ -3905,7 +3982,7 @@ var heritage_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config12 = {
+var config13 = {
   path: ["/api/heritage", "/api/heritage/detail"]
 };
 
@@ -3976,7 +4053,7 @@ var image_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config13 = {
+var config14 = {
   path: "/api/image"
 };
 
@@ -3988,7 +4065,7 @@ var mapconfig_default = async (req, _context) => {
   const kakaoKey = (Netlify.env.get("KAKAO_JS_KEY") || Netlify.env.get("kakao_js_key") || "").trim();
   return jsonResponse({ provider: kakaoKey ? "kakao" : "naver", kakaoKey: kakaoKey || null }, { headers: { "Cache-Control": "no-store" } });
 };
-var config14 = {
+var config15 = {
   path: "/api/mapconfig"
 };
 
@@ -4011,9 +4088,9 @@ var mapsearch_default = async (req, _context) => {
   if (denied) return denied;
   const q = (new URL(req.url).searchParams.get("q") || "").replace(/\s+/g, " ").trim().slice(0, 30);
   if (q.length < 2) return jsonResponse({ error: "bad query" }, { status: 400 });
-  const store13 = getStore("cache");
+  const store14 = getStore("cache");
   const cKey = `msearch-v1-${await sha13(q)}`;
-  const hit = await store13.get(cKey, { type: "json" });
+  const hit = await store14.get(cKey, { type: "json" });
   if (hit && Date.now() - (hit.at || 0) < DAY) return jsonResponse({ ...hit, cached: true });
   const key = Netlify.env.get("TOUR_API_KEY") || FALLBACK_KEY6;
   const [h, t] = await Promise.allSettled([
@@ -4028,19 +4105,19 @@ var mapsearch_default = async (req, _context) => {
     return { cat, item: cat === "\uD589\uC0AC" ? { ...base, place: address, startDate: dashed(it.eventstartdate), endDate: dashed(it.eventenddate) } : { ...base, type: cat === "\uB9DB\uC9D1" ? "restaurant" : "attraction" } };
   }) : [];
   const out = { at: Date.now(), q, heritage, tour, errors: [h, t].filter((r) => r.status === "rejected").length };
-  if (!out.errors) await store13.setJSON(cKey, out);
+  if (!out.errors) await store14.setJSON(cKey, out);
   return jsonResponse(out);
 };
-var config15 = {
+var config16 = {
   path: "/api/mapsearch"
 };
 
 // ../netlify/functions/marks.mts
-var KEY3 = "all";
-var store7 = () => getStore({ name: "marks", consistency: "strong" });
-var KEY_RE2 = /^[a-z]:[A-Za-z0-9_\-.:]{1,100}$/;
-async function readAll2() {
-  const data = await store7().get(KEY3, { type: "json" });
+var KEY4 = "all";
+var store8 = () => getStore({ name: "marks", consistency: "strong" });
+var KEY_RE3 = /^[a-z]:[A-Za-z0-9_\-.:]{1,100}$/;
+async function readAll3() {
+  const data = await store8().get(KEY4, { type: "json" });
   return data && typeof data === "object" && !Array.isArray(data) ? data : {};
 }
 var marks_default = async (req, _context) => {
@@ -4051,22 +4128,22 @@ var marks_default = async (req, _context) => {
     if (req.method === "GET") {
       const share = await viewerShare(req);
       if (share && !share.marks) return jsonResponse({ items: {}, count: 0, hidden: true });
-      const items = await readAll2();
+      const items = await readAll3();
       return jsonResponse({ items, count: Object.keys(items).length });
     }
     if (req.method === "PUT") {
       const body = await req.json();
       const key = typeof body?.key === "string" ? body.key : "";
-      if (!KEY_RE2.test(key)) return jsonResponse({ error: "bad key" }, { status: 400 });
+      if (!KEY_RE3.test(key)) return jsonResponse({ error: "bad key" }, { status: 400 });
       const visited = body?.visited === true;
       const date = visited && typeof body?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : null;
       const r = Math.round(Number(body?.rating));
       const rating = Number.isFinite(r) ? Math.min(5, Math.max(0, r)) : 0;
       const note = typeof body?.note === "string" ? body.note.trim().slice(0, 1e3) : "";
-      const items = await readAll2();
+      const items = await readAll3();
       if (!visited && !rating && !note) delete items[key];
       else items[key] = { visited, date, rating, note, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-      await store7().setJSON(KEY3, items);
+      await store8().setJSON(KEY4, items);
       return jsonResponse({ ok: true, item: items[key] || null });
     }
     return jsonResponse({ error: "method not allowed" }, { status: 405 });
@@ -4074,7 +4151,7 @@ var marks_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config16 = {
+var config17 = {
   path: "/api/marks"
 };
 
@@ -4111,9 +4188,9 @@ var mtnpaths_default = async (req, _context) => {
   }
   const box = [w, s, e, n].map((v) => v.toFixed(3));
   const cKey = `vwpath-v1-${box.join("_")}`;
-  const store13 = getStore("cache");
+  const store14 = getStore("cache");
   if (!debug) {
-    const hit = await store13.get(cKey, { type: "json" });
+    const hit = await store14.get(cKey, { type: "json" });
     if (hit && Date.now() - (hit.at || 0) < TTL_MS5) return jsonResponse({ ...hit, cached: true });
   }
   try {
@@ -4159,13 +4236,13 @@ var mtnpaths_default = async (req, _context) => {
       if (page >= pages) break;
     }
     const out = { at: Date.now(), configured: true, total, lines };
-    if (!debug) await store13.setJSON(cKey, out);
+    if (!debug) await store14.setJSON(cKey, out);
     return jsonResponse(debug ? { ...out, sample } : out);
   } catch (err) {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config17 = {
+var config18 = {
   path: "/api/mtnpaths"
 };
 
@@ -4290,10 +4367,10 @@ var mtntrail_default = async (req, _context) => {
   const hasLL = Number.isFinite(lat) && Number.isFinite(lng) && lat > 32 && lng > 124;
   const debug = q.get("debug") === "1";
   if (name.length < 2) return jsonResponse({ error: "bad name" }, { status: 400 });
-  const store13 = getStore("cache");
+  const store14 = getStore("cache");
   const cKey = `mtrail-v2-${norm3(name)}`;
   if (!debug) {
-    const hit = await store13.get(cKey, { type: "json" });
+    const hit = await store14.get(cKey, { type: "json" });
     if (hit && Date.now() - (hit.at || 0) < TTL_MS6) return jsonResponse({ ...hit, cached: true });
   }
   try {
@@ -4329,14 +4406,14 @@ var mtntrail_default = async (req, _context) => {
       };
     }).filter((c) => c.points.length >= 2 && c.km >= 0.2).sort((a, b) => b.km - a.km).slice(0, 12);
     const out = { at: Date.now(), name, courses, rawCount: r.rows.length };
-    if (!debug && r.rows.length) await store13.setJSON(cKey, out);
+    if (!debug && r.rows.length) await store14.setJSON(cKey, out);
     return jsonResponse(debug ? { ...out, sample: r.rows.slice(0, 3) } : out);
   } catch (err) {
     if (err instanceof UpstreamTimeout) return jsonResponse({ error: "upstream-timeout" }, { status: 504 });
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config18 = {
+var config19 = {
   path: "/api/mtntrail"
 };
 
@@ -4408,11 +4485,11 @@ var mtninfo_default = async (req, _context) => {
   const near = (q.get("near") || "").slice(0, 40);
   const debug = q.get("debug") === "1";
   if (name.length < 2) return jsonResponse({ error: "bad name" }, { status: 400 });
-  const store13 = getStore("cache");
+  const store14 = getStore("cache");
   const cKey = `mtninfo-v2-${norm4(name)}`;
   let list = null;
   if (!debug) {
-    const hit = await store13.get(cKey, { type: "json" });
+    const hit = await store14.get(cKey, { type: "json" });
     if (hit && Date.now() - (hit.at || 0) < TTL_MS7) list = hit.list;
   }
   let raw = [];
@@ -4423,7 +4500,7 @@ var mtninfo_default = async (req, _context) => {
       if (r.needApply) return jsonResponse({ error: "need-apply", apply: [DATASET3] }, { status: 503 });
       raw = r.items;
       list = r.items.map(shape).filter((x) => x.name);
-      await store13.setJSON(cKey, { at: Date.now(), list });
+      await store14.setJSON(cKey, { at: Date.now(), list });
     } catch (e) {
       return jsonResponse({ error: String(e?.message || e).slice(0, 200) }, { status: 502 });
     }
@@ -4441,11 +4518,11 @@ var mtninfo_default = async (req, _context) => {
   const best = scored[0] && scored[0].s >= 40 ? scored[0].x : null;
   return jsonResponse({ found: !!best, item: best, others: scored.length - (best ? 1 : 0), source: DATASET3.name, ...debug ? { raw: raw.slice(0, 3), list } : {} });
 };
-var config19 = { path: "/api/mtninfo" };
+var config20 = { path: "/api/mtninfo" };
 
 // ../netlify/functions/myplaces.mts
-var KEY4 = "all";
-var store8 = () => getStore({ name: "myplaces", consistency: "strong" });
+var KEY5 = "all";
+var store9 = () => getStore({ name: "myplaces", consistency: "strong" });
 var str5 = (v, max) => typeof v === "string" ? v.trim().slice(0, max) : "";
 var num6 = (v) => {
   const n = typeof v === "string" ? Number(v) : v;
@@ -4459,7 +4536,7 @@ var myplaces_default = async (req, _context) => {
     if (req.method === "GET") {
       const share = await viewerShare(req);
       if (share && !share.tabs.mine) return jsonResponse({ items: [], count: 0, updatedAt: null, hidden: true });
-      const data = await store8().get(KEY4, { type: "json" });
+      const data = await store9().get(KEY5, { type: "json" });
       const items = Array.isArray(data?.items) ? data.items : [];
       return jsonResponse({ items, count: items.length, updatedAt: data?.updatedAt || null });
     }
@@ -4478,7 +4555,7 @@ var myplaces_default = async (req, _context) => {
         lng: num6(p?.lng)
       })).filter((p) => p.name);
       const updatedAt = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-      await store8().setJSON(KEY4, { items, updatedAt });
+      await store9().setJSON(KEY5, { items, updatedAt });
       return jsonResponse({ ok: true, count: items.length, updatedAt });
     }
     return jsonResponse({ error: "method not allowed" }, { status: 405 });
@@ -4486,7 +4563,7 @@ var myplaces_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config20 = {
+var config21 = {
   path: "/api/myplaces"
 };
 
@@ -4529,8 +4606,8 @@ var nearby_default = async (req, _context) => {
   if (!(lat > 32 && lat < 39 && lng > 124 && lng < 132.5)) return jsonResponse({ error: "bad point" }, { status: 400 });
   const cell = [Math.round(lat * 20) / 20, Math.round(lng * 20) / 20];
   const cKey = `nearby-v1-${cell[0].toFixed(2)}_${cell[1].toFixed(2)}-${today()}`;
-  const store13 = getStore("cache");
-  const hit = await store13.get(cKey, { type: "json" });
+  const store14 = getStore("cache");
+  const hit = await store14.get(cKey, { type: "json" });
   if (hit && Date.now() - (hit.at || 0) < TTL_MS8) return jsonResponse({ ...hit, cached: true });
   const key = Netlify.env.get("TOUR_API_KEY") || FALLBACK_KEY9;
   const pts = centers(cell[0], cell[1]);
@@ -4570,10 +4647,10 @@ var nearby_default = async (req, _context) => {
   restaurants.sort(byDist);
   festivals.sort(byDist);
   const out = { at: Date.now(), lat, lng, radiusKm: RADIUS_KM, attractions, restaurants, festivals, failed };
-  if (!failed) await store13.setJSON(cKey, out);
+  if (!failed) await store14.setJSON(cKey, out);
   return jsonResponse(out);
 };
-var config21 = {
+var config22 = {
   path: "/api/nearby"
 };
 
@@ -4582,7 +4659,7 @@ var EXT2 = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "ima
 var TYPE2 = { jpg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" };
 var ID_RE2 = /^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/;
 var MAX_BYTES2 = 5 * 1024 * 1024;
-var photos2 = () => getStore({ name: "photos", consistency: "strong" });
+var photos3 = () => getStore({ name: "photos", consistency: "strong" });
 var photos_default = async (req, context) => {
   if (req.method === "OPTIONS") return corsPreflightResponse();
   const denied = await guard(req);
@@ -4597,7 +4674,7 @@ var photos_default = async (req, context) => {
       if (!body.byteLength) return jsonResponse({ error: "empty body" }, { status: 400 });
       if (body.byteLength > MAX_BYTES2) return jsonResponse({ error: "image too large" }, { status: 413 });
       const newId = `${crypto.randomUUID()}.${ext}`;
-      await photos2().set(newId, body);
+      await photos3().set(newId, body);
       return jsonResponse({ id: newId }, { status: 201 });
     }
     if (req.method === "GET" && id) {
@@ -4610,7 +4687,7 @@ var photos_default = async (req, context) => {
           return jsonResponse({ error: "not found" }, { status: 404 });
         }
       }
-      const data = await photos2().get(id, { type: "arrayBuffer" });
+      const data = await photos3().get(id, { type: "arrayBuffer" });
       if (!data) return jsonResponse({ error: "not found" }, { status: 404 });
       return new Response(data, {
         headers: {
@@ -4624,14 +4701,14 @@ var photos_default = async (req, context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config22 = {
+var config23 = {
   path: ["/api/photos", "/api/photos/:id"]
 };
 
 // ../netlify/functions/picks.mts
-var store9 = () => getStore({ name: "picks", consistency: "strong" });
+var store10 = () => getStore({ name: "picks", consistency: "strong" });
 var gphotos2 = () => getStore({ name: "gphotos", consistency: "strong" });
-var PHOTO_RE3 = /^[0-9a-f-]{36}\.(jpg|png|webp)$/;
+var PHOTO_RE4 = /^[0-9a-f-]{36}\.(jpg|png|webp)$/;
 var MAX_PHOTOS2 = 5;
 var STATUSES2 = ["ok", "pending", "hidden"];
 var YT_RE = /^https:\/\/(www\.|m\.)?(youtube\.com\/(watch\?v=[\w-]{6,20}([&#][\w=&%-]*)?|shorts\/[\w-]{6,20}|live\/[\w-]{6,20}|@[\w.-]{2,40})|youtu\.be\/[\w-]{6,20}(\?[\w=&%-]*)?)$/;
@@ -4658,7 +4735,7 @@ function clean3(input) {
   const address = str6(input?.address, 120), road = str6(input?.road, 120);
   const photoIds = [];
   for (const id of Array.isArray(input?.photoIds) ? input.photoIds : []) {
-    if (typeof id === "string" && PHOTO_RE3.test(id) && !photoIds.includes(id)) photoIds.push(id);
+    if (typeof id === "string" && PHOTO_RE4.test(id) && !photoIds.includes(id)) photoIds.push(id);
     if (photoIds.length >= MAX_PHOTOS2) break;
   }
   return {
@@ -4713,7 +4790,7 @@ var picks_default = async (req, context) => {
   const acct = a.guest ? await sha2564("gs|acct|" + a.guest.id) : "";
   const isMine = (p) => !!acct && p.author === acct || !!author && p.author === author;
   const id = context.params?.id;
-  const s = store9();
+  const s = store10();
   const strip2 = (p) => {
     const { author: _a, ...rest } = p;
     return { ...rest, mine: isMine(p) };
@@ -4808,12 +4885,12 @@ var picks_default = async (req, context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config23 = {
+var config24 = {
   path: ["/api/picks", "/api/picks/:id"]
 };
 
 // ../netlify/functions/fixes.mts
-var store10 = () => getStore({ name: "fixes", consistency: "strong" });
+var store11 = () => getStore({ name: "fixes", consistency: "strong" });
 var MAX_REPORTS = 300;
 var str7 = (v, max) => typeof v === "string" ? v.replace(/[\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max) : "";
 var text2 = (v, max) => typeof v === "string" ? v.replace(/[\u0000-\u0009\u000b-\u001f]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, max) : "";
@@ -4822,8 +4899,8 @@ var num8 = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.round(n * 1e5) / 1e5 : null;
 };
-async function readAll3() {
-  const d = await store10().get("all", { type: "json" }).catch(() => null);
+async function readAll4() {
+  const d = await store11().get("all", { type: "json" }).catch(() => null);
   return { hidden: d && d.hidden || {}, edits: d && d.edits || {} };
 }
 var fixes_default = async (req, _context) => {
@@ -4831,7 +4908,7 @@ var fixes_default = async (req, _context) => {
   const a = await accessOf(req);
   if (!a.canView) return jsonResponse({ error: a.needGuest ? "guest-login" : "link required" }, { status: 401 });
   const isOwner = a.canEdit;
-  const s = store10();
+  const s = store11();
   try {
     if (req.method === "GET") {
       const q = new URL(req.url).searchParams;
@@ -4853,7 +4930,7 @@ var fixes_default = async (req, _context) => {
         all.sort((x, y) => (x.status === "new" ? 0 : 1) - (y.status === "new" ? 0 : 1) || String(y.at).localeCompare(String(x.at)));
         return jsonResponse({ ok: true, items: all });
       }
-      const d2 = await readAll3();
+      const d2 = await readAll4();
       return jsonResponse({ ok: true, hidden: isOwner ? d2.hidden : Object.fromEntries(Object.keys(d2.hidden).map((k) => [k, 1])), edits: d2.edits });
     }
     if (req.method !== "POST") return jsonResponse({ error: "method not allowed" }, { status: 405 });
@@ -4898,7 +4975,7 @@ var fixes_default = async (req, _context) => {
       return jsonResponse({ ok: true });
     }
     if (!keyOk(key)) return jsonResponse({ error: "bad key" }, { status: 400 });
-    const d = await readAll3();
+    const d = await readAll4();
     if (act === "hide") d.hidden[key] = { title: str7(body?.title, 80), cat: str7(body?.cat, 20), at: now };
     else if (act === "unhide") delete d.hidden[key];
     else if (act === "edit") {
@@ -4920,7 +4997,7 @@ var fixes_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config24 = {
+var config25 = {
   path: "/api/fixes"
 };
 
@@ -4931,7 +5008,7 @@ var TTL_MS9 = 24 * 60 * 60 * 1e3;
 var PAGE = 300;
 var FULL_CHUNK = 300;
 var LIST_CHUNK = 1200;
-var store11 = () => getStore("cache");
+var store12 = () => getStore("cache");
 var https = (u) => {
   const s = String(u || "").trim();
   return /^http:\/\//i.test(s) ? "https://" + s.slice(7) : s;
@@ -5044,7 +5121,7 @@ async function refresh(key) {
   for (let p = 2; p <= pages; p++) rest.push(callGovApi(BASE, "basedList", key, { numOfRows: PAGE, pageNo: p }));
   for (const r of await Promise.all(rest)) all = all.concat(r.items || []);
   const full = all.map(trimFull).filter((o) => o.contentId);
-  const s = store11();
+  const s = store12();
   const nFull = Math.ceil(full.length / FULL_CHUNK);
   const list = [];
   for (let i = 0; i < nFull; i++) {
@@ -5062,7 +5139,7 @@ async function refresh(key) {
   return { meta, list };
 }
 async function readList(meta) {
-  const s = store11();
+  const s = store12();
   let list = [];
   for (let i = 0; i < (meta.nList || 0); i++) list = list.concat(await s.get("gocamp-list-" + i, { type: "json" }) || []);
   return list;
@@ -5075,7 +5152,7 @@ var camping_default = async (req, _context) => {
   if (share && share.tabs && share.tabs.camp === false) return jsonResponse({ items: [], hidden: true });
   const q = new URL(req.url).searchParams;
   const key = Netlify.env.get("TOUR_API_KEY") || FALLBACK_KEY10;
-  const s = store11();
+  const s = store12();
   try {
     const img2 = q.get("img");
     if (img2) {
@@ -5109,12 +5186,12 @@ var camping_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config25 = {
+var config26 = {
   path: "/api/camping"
 };
 
 // ../netlify/functions/campshops.mts
-var store12 = () => getStore({ name: "campshops", consistency: "strong" });
+var store13 = () => getStore({ name: "campshops", consistency: "strong" });
 var str9 = (v, n) => typeof v === "string" ? v.replace(/[\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, n) : "";
 var num9 = (v) => {
   const n = Number(v);
@@ -5128,7 +5205,7 @@ var campshops_default = async (req, _context) => {
     if (req.method === "GET") {
       const share = await viewerShare(req);
       if (share && share.tabs && share.tabs.camp === false) return jsonResponse({ items: [], hidden: true });
-      const d = await store12().get("all", { type: "json" });
+      const d = await store13().get("all", { type: "json" });
       return jsonResponse({ items: d && d.items || [], at: d && d.at || null });
     }
     if (req.method === "PUT") {
@@ -5155,7 +5232,7 @@ var campshops_default = async (req, _context) => {
         return true;
       });
       const at = (/* @__PURE__ */ new Date()).toISOString();
-      await store12().setJSON("all", { items, at });
+      await store13().setJSON("all", { items, at });
       return jsonResponse({ ok: true, count: items.length, at });
     }
     return jsonResponse({ error: "method not allowed" }, { status: 405 });
@@ -5163,7 +5240,7 @@ var campshops_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config26 = {
+var config27 = {
   path: "/api/campshops"
 };
 
@@ -5218,7 +5295,7 @@ var placedetail_default = async (req, _context) => {
     let type = q.get("type") || "";
     const debug = q.get("debug") === "1";
     const t0 = Date.now();
-    const store13 = getStore("cache");
+    const store14 = getStore("cache");
     const key = Netlify.env.get("TOUR_API_KEY") || FALLBACK_KEY11;
     let matched = "";
     const name = (q.get("q") || "").replace(/\(.*?\)/g, " ").replace(/\s+/g, " ").trim().slice(0, 40);
@@ -5227,7 +5304,7 @@ var placedetail_default = async (req, _context) => {
       const hasLL = Number.isFinite(lat) && Number.isFinite(lng) && lat > 32 && lng > 124;
       const radius = Math.min(Math.max(Number(q.get("r")) || 3, 0.5), 8);
       const qKey = `pdq2-${await sha14(name + "|" + (hasLL ? lat.toFixed(3) + "," + lng.toFixed(3) : "") + "|" + radius)}`;
-      let found = debug ? null : await store13.get(qKey, { type: "json" });
+      let found = debug ? null : await store14.get(qKey, { type: "json" });
       if (!found) {
         const norm7 = (t) => String(t || "").replace(/\(.*?\)|\s+/g, "");
         const isForest = /(휴양림|산림욕장|휴양마을)$/.test(name.replace(/\s+/g, ""));
@@ -5257,7 +5334,7 @@ var placedetail_default = async (req, _context) => {
           if (best && best.firstimage) break;
         }
         found = best ? { id: String(best.contentid), type: String(best.contenttypeid), title: clean4(best.title), image: https2(best.firstimage) } : { none: true };
-        if (!debug && anyOk) await store13.setJSON(qKey, found);
+        if (!debug && anyOk) await store14.setJSON(qKey, found);
       }
       if (found.none) return jsonResponse({ none: true, info: [], images: [] });
       if (q.get("lite") === "1") return jsonResponse({ matched: found.title || "", image: found.image || "" });
@@ -5268,7 +5345,7 @@ var placedetail_default = async (req, _context) => {
     if (!/^\d{1,12}$/.test(id) || !/^\d{2}$/.test(type)) return jsonResponse({ error: "bad request" }, { status: 400 });
     const cKey = `pd2-${type}-${id}`;
     if (!debug) {
-      const hit = await store13.get(cKey, { type: "json" });
+      const hit = await store14.get(cKey, { type: "json" });
       if (hit) return jsonResponse({ ...hit, matched, cached: true });
     }
     const [common, intro, image] = await Promise.all([
@@ -5302,13 +5379,13 @@ var placedetail_default = async (req, _context) => {
     const ok = common.ok || intro.ok || image.ok;
     if (!ok) out.partial = true;
     if (debug) out.debug = { common: [common.resultCode, common.resultMsg, Object.keys(c)], intro: [intro.resultCode, Object.keys(it)], image: [image.resultCode, image.items.length] };
-    else if (ok) await store13.setJSON(cKey, out);
+    else if (ok) await store14.setJSON(cKey, out);
     return jsonResponse(out);
   } catch (err) {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config27 = {
+var config28 = {
   path: "/api/placedetail"
 };
 
@@ -5346,7 +5423,7 @@ var placesearch_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config28 = {
+var config29 = {
   path: "/api/placesearch"
 };
 
@@ -5375,7 +5452,7 @@ var restaurants_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config29 = {
+var config30 = {
   path: "/api/restaurants"
 };
 
@@ -5442,23 +5519,23 @@ var route_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config30 = {
+var config31 = {
   path: "/api/route"
 };
 
 // ../netlify/functions/stories.mts
-var KEY5 = "all";
+var KEY6 = "all";
 var stories = () => getStore({ name: "stories", consistency: "strong" });
-var photos3 = () => getStore({ name: "photos", consistency: "strong" });
+var photos4 = () => getStore({ name: "photos", consistency: "strong" });
 var str10 = (v, max) => typeof v === "string" ? v.trim().slice(0, max) : "";
 var num10 = (v) => typeof v === "number" && Number.isFinite(v) ? v : null;
-var PHOTO_RE4 = /^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/;
+var PHOTO_RE5 = /^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/;
 var MAX_PHOTOS3 = 40;
 function photoList(input) {
   const raw = Array.isArray(input?.photoIds) ? input.photoIds : input?.photoId ? [input.photoId] : [];
   const out = [];
   for (const id of raw) {
-    if (typeof id === "string" && PHOTO_RE4.test(id) && !out.includes(id)) out.push(id);
+    if (typeof id === "string" && PHOTO_RE5.test(id) && !out.includes(id)) out.push(id);
     if (out.length >= MAX_PHOTOS3) break;
   }
   return out;
@@ -5481,8 +5558,8 @@ function clean5(input) {
     hike: cleanHike(input?.hike)
   };
 }
-async function readAll4() {
-  const data = await stories().get(KEY5, { type: "json" });
+async function readAll5() {
+  const data = await stories().get(KEY6, { type: "json" });
   return Array.isArray(data) ? data : [];
 }
 var stories_default = async (req, context) => {
@@ -5492,7 +5569,7 @@ var stories_default = async (req, context) => {
   const id = context.params?.id;
   try {
     if (req.method === "GET") {
-      let items = (await readAll4()).map((s) => ({ ...s, photoIds: photoList(s) }));
+      let items = (await readAll5()).map((s) => ({ ...s, photoIds: photoList(s) }));
       const share = await viewerShare(req);
       if (share) {
         const hidden = new Set(share.hiddenStories);
@@ -5504,27 +5581,27 @@ var stories_default = async (req, context) => {
     if (req.method === "POST" && !id) {
       const now = (/* @__PURE__ */ new Date()).toISOString();
       const item = { id: crypto.randomUUID(), ...clean5(await req.json()), createdAt: now, updatedAt: now };
-      const items = await readAll4();
+      const items = await readAll5();
       items.push(item);
-      await stories().setJSON(KEY5, items);
+      await stories().setJSON(KEY6, items);
       return jsonResponse({ item }, { status: 201 });
     }
     if (req.method === "PUT" && id) {
-      const items = await readAll4();
+      const items = await readAll5();
       const idx = items.findIndex((s) => s.id === id);
       if (idx < 0) return jsonResponse({ error: "not found" }, { status: 404 });
       const oldPhotos = photoList(items[idx]);
       items[idx] = { ...items[idx], ...clean5(await req.json()), updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-      await stories().setJSON(KEY5, items);
-      for (const id2 of oldPhotos) if (!items[idx].photoIds.includes(id2)) await photos3().delete(id2);
+      await stories().setJSON(KEY6, items);
+      for (const id2 of oldPhotos) if (!items[idx].photoIds.includes(id2)) await photos4().delete(id2);
       return jsonResponse({ item: items[idx] });
     }
     if (req.method === "DELETE" && id) {
-      const items = await readAll4();
+      const items = await readAll5();
       const target = items.find((s) => s.id === id);
       if (!target) return jsonResponse({ ok: true });
-      await stories().setJSON(KEY5, items.filter((s) => s.id !== id));
-      for (const id2 of photoList(target)) await photos3().delete(id2);
+      await stories().setJSON(KEY6, items.filter((s) => s.id !== id));
+      for (const id2 of photoList(target)) await photos4().delete(id2);
       return jsonResponse({ ok: true });
     }
     return jsonResponse({ error: "method not allowed" }, { status: 405 });
@@ -5532,7 +5609,7 @@ var stories_default = async (req, context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config31 = {
+var config32 = {
   path: ["/api/stories", "/api/stories/:id"]
 };
 
@@ -5594,7 +5671,7 @@ var trailroute_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config32 = {
+var config33 = {
   path: "/api/trailroute"
 };
 
@@ -5664,7 +5741,7 @@ var trails_default = async (req, _context) => {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 500 });
   }
 };
-var config33 = {
+var config34 = {
   path: "/api/trails"
 };
 
@@ -5741,12 +5818,12 @@ var num11 = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
-async function forecast(lat, lng, key, store13) {
+async function forecast(lat, lng, key, store14) {
   const { nx, ny } = toGrid(lat, lng);
   let base = latestBase();
   for (let attempt = 0; attempt < 2; attempt++) {
     const cKey = `wx-v1-${nx}-${ny}-${base.date}${base.time}`;
-    const hit = await store13.get(cKey, { type: "json" });
+    const hit = await store14.get(cKey, { type: "json" });
     if (hit) return { ...hit, cached: true };
     const url = `${FCST_API}?serviceKey=${encodeURIComponent(key)}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${base.date}&base_time=${base.time}&nx=${nx}&ny=${ny}`;
     const items = itemsOf(await getJson(url));
@@ -5823,18 +5900,18 @@ async function forecast(lat, lng, key, store13) {
       };
     }).slice(0, 4);
     const out = { at: Date.now(), nx, ny, base: base.date + base.time, days: dayList, hours: hours.slice(0, 48) };
-    await store13.setJSON(cKey, out);
+    await store14.setJSON(cKey, out);
     return out;
   }
   return { nx, ny, none: true, days: [], hours: [] };
 }
-async function nowcast(lat, lng, key, store13) {
+async function nowcast(lat, lng, key, store14) {
   const { nx, ny } = toGrid(lat, lng);
   for (const back of [45, 105]) {
     const k = kstParts(Date.now() - back * 60 * 1e3);
     const base = { date: k.date, time: String(k.hour).padStart(2, "0") + "00" };
     const cKey = `wxn-v1-${nx}-${ny}-${base.date}${base.time}`;
-    const hit = await store13.get(cKey, { type: "json" });
+    const hit = await store14.get(cKey, { type: "json" });
     if (hit) return hit;
     const url = `${NOW_API}?serviceKey=${encodeURIComponent(key)}&pageNo=1&numOfRows=20&dataType=JSON&base_date=${base.date}&base_time=${base.time}&nx=${nx}&ny=${ny}`;
     const items = itemsOf(await getJson(url));
@@ -5864,14 +5941,14 @@ async function nowcast(lat, lng, key, store13) {
       }
     }
     if (o.tmp == null) continue;
-    await store13.setJSON(cKey, o);
+    await store14.setJSON(cKey, o);
     return o;
   }
   return null;
 }
 var norm5 = (s) => String(s ?? "").replace(/\s+|\(.*?\)/g, "");
-async function mountainObs(name, key, store13) {
-  let all = await store13.get("mtwx-v1-all", { type: "json" });
+async function mountainObs(name, key, store14) {
+  let all = await store14.get("mtwx-v1-all", { type: "json" });
   if (!all || Date.now() - (all.at || 0) > MT_TTL_MS) {
     const baseUrl = `${MT_API}?ServiceKey=${encodeURIComponent(key)}&pageNo=1&numOfRows=1000&_type=json`;
     let rows = itemsOf(await getJson(baseUrl));
@@ -5899,7 +5976,7 @@ async function mountainObs(name, key, store13) {
         pa: num11(r.pa)
       }))
     };
-    if (all.rows.length) await store13.setJSON("mtwx-v1-all", all);
+    if (all.rows.length) await store14.setJSON("mtwx-v1-all", all);
   }
   const base = norm5(name);
   const paren = (name.match(/\((.*?)\)/) || [])[1] || "";
@@ -5920,23 +5997,23 @@ var weather_default = async (req, _context) => {
   if (!(lat > 32 && lat < 39.5 && lng > 124 && lng < 132)) return jsonResponse({ error: "bad lat/lng" }, { status: 400 });
   const mt = (q.get("mt") || "").replace(/\s+/g, " ").trim().slice(0, 30);
   const key = Netlify.env.get("WEATHER_API_KEY") || Netlify.env.get("TOUR_API_KEY") || FALLBACK_KEY15;
-  const store13 = getStore("cache");
+  const store14 = getStore("cache");
   const apply = [];
   const out = { apply };
   const jobs = [
-    forecast(lat, lng, key, store13).then((f) => {
+    forecast(lat, lng, key, store14).then((f) => {
       out.fcst = f;
     }).catch((err) => {
       if (err instanceof NeedApply2) apply.push(DATASETS2.fcst);
       else out.fcstError = String(err?.message || err).slice(0, 160);
     })
   ];
-  jobs.push(nowcast(lat, lng, key, store13).then((n) => {
+  jobs.push(nowcast(lat, lng, key, store14).then((n) => {
     if (n) out.now = n;
   }).catch(() => {
   }));
   if (mt.length >= 2) {
-    jobs.push(mountainObs(mt, key, store13).then((m) => {
+    jobs.push(mountainObs(mt, key, store14).then((m) => {
       out.mt = m;
     }).catch((err) => {
       if (err instanceof NeedApply2) apply.push(DATASETS2.mt);
@@ -5946,7 +6023,7 @@ var weather_default = async (req, _context) => {
   await Promise.all(jobs);
   return jsonResponse(out, { headers: { "Cache-Control": "no-store" } });
 };
-var config34 = {
+var config35 = {
   path: "/api/weather"
 };
 
@@ -6008,10 +6085,10 @@ var wiki_default = async (req, _context) => {
   const addr = (q.get("addr") || "").slice(0, 60);
   const debug = q.get("debug") === "1";
   if (base.length < 2) return jsonResponse({ error: "bad query" }, { status: 400 });
-  const store13 = getStore("cache");
+  const store14 = getStore("cache");
   const cKey = `wiki-v1-${await sha17(name + "|" + (hasLL ? lat.toFixed(2) + "," + lng.toFixed(2) : "") + "|" + addr)}`;
   if (!debug) {
-    const hit = await store13.get(cKey, { type: "json" });
+    const hit = await store14.get(cKey, { type: "json" });
     if (hit && Date.now() - (hit.at || 0) < TTL_MS10) return jsonResponse({ ...hit, cached: true });
   }
   try {
@@ -6050,7 +6127,7 @@ var wiki_default = async (req, _context) => {
     }
     if (!page) {
       const out2 = { at: Date.now(), none: true, images: [] };
-      if (!debug) await store13.setJSON(cKey, out2);
+      if (!debug) await store14.setJSON(cKey, out2);
       return jsonResponse(out2);
     }
     const files = [];
@@ -6112,13 +6189,13 @@ var wiki_default = async (req, _context) => {
       textLicense: "CC BY-SA 4.0",
       images
     };
-    if (!debug) await store13.setJSON(cKey, out);
+    if (!debug) await store14.setJSON(cKey, out);
     return jsonResponse(out);
   } catch (err) {
     return jsonResponse({ error: err?.message || "unknown error" }, { status: 502 });
   }
 };
-var config35 = {
+var config36 = {
   path: "/api/wiki"
 };
 
@@ -6151,38 +6228,39 @@ for (const [fn, cfg] of [
   [attractions_default, config],
   [auth_default, config2],
   [customimages_default, config3],
-  [debug_default, config4],
-  [festivals_default, config5],
-  [forest_default, config6],
-  [golf_default, config7],
-  [golfosm_default, config8],
-  [glog_default, config9],
-  [gphotos_default, config10],
-  [gstories_default, config11],
-  [heritage_default, config12],
-  [image_default, config13],
-  [mapconfig_default, config14],
-  [mapsearch_default, config15],
-  [marks_default, config16],
-  [mtnpaths_default, config17],
-  [mtntrail_default, config18],
-  [mtninfo_default, config19],
-  [myplaces_default, config20],
-  [nearby_default, config21],
-  [photos_default, config22],
-  [picks_default, config23],
-  [fixes_default, config24],
-  [camping_default, config25],
-  [campshops_default, config26],
-  [placedetail_default, config27],
-  [placesearch_default, config28],
-  [restaurants_default, config29],
-  [route_default, config30],
-  [stories_default, config31],
-  [trailroute_default, config32],
-  [trails_default, config33],
-  [weather_default, config34],
-  [wiki_default, config35]
+  [placephotos_default, config4],
+  [debug_default, config5],
+  [festivals_default, config6],
+  [forest_default, config7],
+  [golf_default, config8],
+  [golfosm_default, config9],
+  [glog_default, config10],
+  [gphotos_default, config11],
+  [gstories_default, config12],
+  [heritage_default, config13],
+  [image_default, config14],
+  [mapconfig_default, config15],
+  [mapsearch_default, config16],
+  [marks_default, config17],
+  [mtnpaths_default, config18],
+  [mtntrail_default, config19],
+  [mtninfo_default, config20],
+  [myplaces_default, config21],
+  [nearby_default, config22],
+  [photos_default, config23],
+  [picks_default, config24],
+  [fixes_default, config25],
+  [camping_default, config26],
+  [campshops_default, config27],
+  [placedetail_default, config28],
+  [placesearch_default, config29],
+  [restaurants_default, config30],
+  [route_default, config31],
+  [stories_default, config32],
+  [trailroute_default, config33],
+  [trails_default, config34],
+  [weather_default, config35],
+  [wiki_default, config36]
 ]) {
   const paths = Array.isArray(cfg?.path) ? cfg.path : [cfg?.path];
   for (const p of paths) {
@@ -6232,10 +6310,10 @@ async function handleImport(req, env) {
   if (await cfg.get("importLocked")) return json({ error: "locked" }, 410);
   const u = new URL(req.url);
   if (u.searchParams.get("raw")) {
-    const store13 = u.searchParams.get("store") || "", key = u.searchParams.get("key") || "";
-    if (!["photos", "gphotos"].includes(store13) || !/^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/.test(key)) return json({ error: "bad key" }, 400);
-    const meta = store13 === "gphotos" ? { author: "imported", at: Date.now() } : {};
-    await getStore(store13).set(key, new Uint8Array(await req.arrayBuffer()), { metadata: meta });
+    const store14 = u.searchParams.get("store") || "", key = u.searchParams.get("key") || "";
+    if (!["photos", "gphotos"].includes(store14) || !/^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/.test(key)) return json({ error: "bad key" }, 400);
+    const meta = store14 === "gphotos" ? { author: "imported", at: Date.now() } : {};
+    await getStore(store14).set(key, new Uint8Array(await req.arrayBuffer()), { metadata: meta });
     return json({ ok: true, n: 1 });
   }
   const body = await req.json();

@@ -493,6 +493,11 @@
   .hk-imp-btn { display: inline-block; font-size: 14px; font-weight: 600; color: #fff; background: #2b8a3e; border-radius: 999px; padding: 7px 14px; cursor: pointer; }
   .hk-imp-msg { font-size: 12.5px; color: var(--ink-dim); margin-top: 6px; line-height: 1.45; }
   .hk-imp .field { margin: 8px 0 0; }
+  .pd-photo-tools { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .pd-photo-tools .link-btn { margin: 0; }
+  .ap-prev { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  .ap-th { width: 64px; height: 64px; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; cursor: pointer; background: var(--surface); }
+  .ap-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .golf-rounds { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
   .golf-round { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; text-align: left; font: inherit; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); padding: 8px 12px; cursor: pointer; }
   .golf-round small { color: var(--ink-dim); margin-left: auto; }
@@ -3638,6 +3643,18 @@
   var customReady = authReady.then(function () { return api('customimages'); }).then(function (j) { custom = j.items || {}; }).catch(function (err) {
     if (!err || err.status !== 401) console.error('[custom images] load failed', err); // 로그인 전(게스트 입장 화면)에는 401 이 정상
   });
+  // 장소마다 사진을 여러 장 더하고(add), 마음에 안 드는 공식 사진은 화면에서 빼 두는(hide) 기록
+  var pphotos = {};
+  var ppReady = authReady.then(function () { return api('placephotos', { quiet: true }); }).then(function (j) { pphotos = j.items || {}; }).catch(function () {});
+  function ppOf(key) { var p = key && pphotos[key]; return { add: (p && p.add) || [], hide: (p && p.hide) || [] }; }
+  function ppAddUrl(a) { return a.photoId ? photoUrl(a.photoId) : a.url; }
+  function ppHidden(key, url) { return !!(key && url) && ppOf(key).hide.indexOf(url) >= 0; }
+  function ppFirst(key) { var a = ppOf(key).add[0]; return a ? ppAddUrl(a) : null; }
+  async function ppSave(body) {
+    var r = await api('placephotos', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (r.item) pphotos[body.key] = r.item; else delete pphotos[body.key];
+    return r;
+  }
   // ===== 운영자: 항목 지우기(모두에게 숨기기) · 정보 고치기 / 게스트: 정보 오류 알리기 =====
   // 원래 자료(공공데이터 등)는 그대로 두고, 앱에서 보여 줄 때만 숨기거나 고친 내용을 덮어 쓴다.
   var fixes = { hidden: {}, edits: {} };
@@ -3905,8 +3922,8 @@
       var thumb = card.querySelector('.card-thumb');
       thumb.querySelectorAll('img, svg, .trail-inset, .kmap-static').forEach(function (n) { n.remove(); });
       if (!thumb.querySelector('.card-ph')) thumb.insertAdjacentHTML('afterbegin', '<div class="card-ph">' + info.ph + '</div>');
-      await customReady;
-      if (await loadImg(thumb, card, customUrl(view.key))) return;
+      await customReady; await ppReady;
+      if (await loadImg(thumb, card, customUrl(view.key) || ppFirst(view.key))) return;
       return card.__default();
     };
     whenVisible(card, card.__paint);
@@ -4422,7 +4439,7 @@
           lines.filter(function (l) { return l[1]; }).map(function (l) { return '<div class="card-line"><b>' + escapeHtml(l[0]) + ':</b> ' + escapeHtml(l[1]) + '</div>'; }).join('') +
         '</div>' +
       '</div>');
-    whenVisible(card, function () { return setThumb(card, { hero: view.key ? customUrl(view.key) : null, url: view.image || null, q: view.title, lat: view.lat, lng: view.lng, wiki: true, addr: view.place, noSearch: !!generic }); });
+    whenVisible(card, function () { return ppReady.then(function () { return setThumb(card, { hero: view.key ? (customUrl(view.key) || ppFirst(view.key)) : null, url: ppHidden(view.key, view.image) ? null : (view.image || null), q: view.title, lat: view.lat, lng: view.lng, wiki: true, addr: view.place, noSearch: !!generic }); }); });
     card.addEventListener('click', function () { openPlaceDetail(cat, view); });
     return markFix(card, cat, view);
   }
@@ -7697,6 +7714,94 @@
     });
   }
 
+  // 사진 여러 장 넣기 (내가 찍은 사진 파일 여러 장, 또는 웹의 이미지 주소 여러 개)
+  function openAddPhotos(category, view) {
+    var sheet = el(
+      '<div class="sheet-backdrop"><div class="sheet">' +
+        '<div class="sheet-head"><h2>사진 추가</h2><button type="button" class="icon-btn" data-close aria-label="닫기">✕</button></div>' +
+        '<div class="import-summary"><strong>' + escapeHtml(view.title || '') + '</strong> 에 사진을 여러 장 넣어요. 내가 찍은 사진은 파일로, 웹에서 찾은 사진은 이미지 주소로 넣을 수 있고, 넣은 사진은 공식 사진보다 앞에 보여요.</div>' +
+        '<div class="field"><label>사진 파일 (여러 장 한꺼번에 고를 수 있어요)</label>' +
+          '<div class="photo-pick"><label class="btn">사진 고르기<input type="file" accept="image/*" multiple data-file style="display:none"></label></div>' +
+          '<div class="ap-prev" data-prev></div></div>' +
+        '<div class="field"><label for="ap-url">또는 이미지 주소 (한 줄에 하나씩)</label><textarea id="ap-url" data-url rows="3" placeholder="https://... 로 시작하는 이미지 주소"></textarea></div>' +
+        '<div class="status-line err" data-msg hidden></div>' +
+        '<div class="status-line" data-prog hidden></div>' +
+        '<button type="button" class="primary-btn" data-save>사진 넣기</button>' +
+      '</div></div>');
+    $('sheet-root').appendChild(sheet);
+    var files = [], busy = false;
+    function close(reopen) {
+      document.removeEventListener('paste', onPaste);
+      sheet.remove();
+      if (view.card && view.card.isConnected && view.card.__paint) view.card.__paint();
+      if (reopen) openPlaceDetail(category, view);
+    }
+    sheet.querySelector('[data-close]').addEventListener('click', function () { if (!busy) close(true); });
+    sheet.addEventListener('click', function (e) { if (e.target === sheet && !busy) close(true); });
+    var prev = sheet.querySelector('[data-prev]'), msg = sheet.querySelector('[data-msg]'), prog = sheet.querySelector('[data-prog]'), saveBtn = sheet.querySelector('[data-save]');
+    function paintPrev() {
+      prev.innerHTML = '';
+      files.forEach(function (f, i) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'ap-th'; b.title = '누르면 목록에서 빼요';
+        var im = document.createElement('img'); im.src = URL.createObjectURL(f); im.alt = '';
+        b.appendChild(im);
+        b.addEventListener('click', function () { if (!busy) { files.splice(i, 1); paintPrev(); } });
+        prev.appendChild(b);
+      });
+      if (files.length) prev.insertAdjacentHTML('beforeend', '<span class="copy-hint">' + files.length + '장 골랐어요 (사진을 누르면 빼요)</span>');
+    }
+    function addFiles(list) {
+      Array.prototype.forEach.call(list || [], function (f) { if (f && /^image\//.test(f.type) && files.length < 30) files.push(f); });
+      msg.hidden = true; paintPrev();
+    }
+    sheet.querySelector('[data-file]').addEventListener('change', function (e) { addFiles(e.target.files); e.target.value = ''; });
+    function onPaste(e) {
+      var items = (e.clipboardData && e.clipboardData.items) || [], got = [];
+      for (var i = 0; i < items.length; i++) if (items[i].kind === 'file' && /^image\//.test(items[i].type)) got.push(items[i].getAsFile());
+      if (got.length) { e.preventDefault(); addFiles(got); }
+    }
+    document.addEventListener('paste', onPaste);
+    function canOpen(u) {
+      return new Promise(function (resolve) {
+        var t = new Image(); t.referrerPolicy = 'no-referrer';
+        t.onload = function () { resolve(t.naturalWidth > 1); }; t.onerror = function () { resolve(false); };
+        t.src = u;
+      });
+    }
+    saveBtn.addEventListener('click', async function () {
+      if (busy) return;
+      if (saveBtn.dataset.mode === 'close') { close(true); return; }
+      var urls = sheet.querySelector('[data-url]').value.split(/\s+/).map(function (x) { return x.trim(); }).filter(Boolean);
+      if (!files.length && !urls.length) { msg.hidden = false; msg.textContent = '사진 파일을 고르거나 이미지 주소를 넣어주세요.'; return; }
+      if (urls.some(function (u) { return !/^https:\/\/\S+$/.test(u); })) { msg.hidden = false; msg.textContent = '이미지 주소는 https:// 로 시작해야 해요.'; return; }
+      busy = true; saveBtn.disabled = true; msg.hidden = true; prog.hidden = false;
+      var total = files.length + urls.length, done = 0, bad = [];
+      for (var i = 0; i < files.length; i++) {
+        prog.textContent = '올리는 중... (' + (done + bad.length + 1) + '/' + total + ')';
+        try {
+          var blob = await shrinkImage(files[i]);
+          var up = await api('photos', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+          await ppSave({ key: view.key, action: 'add', photoId: up.id });
+          done++;
+        } catch (err) { console.warn('[photos] add failed', err); bad.push(files[i].name || ('사진 ' + (i + 1))); }
+      }
+      for (var j = 0; j < urls.length; j++) {
+        prog.textContent = '확인하는 중... (' + (done + bad.length + 1) + '/' + total + ')';
+        try {
+          if (!(await canOpen(urls[j]))) throw new Error('not image');
+          await ppSave({ key: view.key, action: 'add', url: urls[j] });
+          done++;
+        } catch (err) { bad.push(urls[j].slice(0, 40) + '…'); }
+      }
+      busy = false; saveBtn.disabled = false;
+      if (!bad.length) { close(true); return; }
+      prog.hidden = true; msg.hidden = false;
+      msg.textContent = done + '장을 넣었고 ' + bad.length + '장은 넣지 못했어요: ' + bad.join(', ') + ' — 웹 사진은 이미지를 저장한 뒤 파일로 올리면 대부분 돼요.';
+      if (done) { files = []; paintPrev(); sheet.querySelector('[data-url]').value = ''; saveBtn.dataset.mode = 'close'; saveBtn.textContent = '닫고 보기'; }
+    });
+  }
+
   // ================= 장소 상세 =================
   // 길찾기(자동차) + 내비게이션 앱으로 안내
   function navBoxHtml(view) {
@@ -8441,7 +8546,8 @@
                 '<div class="pd-hero" data-photo><div class="page-photo-ph">' + (view.ph || '📍') + '</div></div>' +
                 '<div class="pd-cap" data-cap></div>' +
                 '<div class="pd-thumbs" data-thumbs hidden></div>' +
-                (view.key ? '<button type="button" class="link-btn" data-setphoto>' + (customUrl(view.key) ? '내 사진 바꾸기' : '내 사진 등록') + '</button>' : '') +
+                (view.key && state.auth && state.auth.canEdit ? '<div class="pd-photo-tools"><button type="button" class="link-btn" data-addphotos>＋ 사진 추가</button><button type="button" class="link-btn danger-line" data-delphoto hidden>🗑 이 사진 빼기</button><button type="button" class="link-btn" data-restorephotos hidden>빼 둔 사진 다시 보기</button></div>' : '') +
+                (view.key ? '<button type="button" class="link-btn" data-setphoto>' + (customUrl(view.key) ? '대표 사진 바꾸기' : '대표 사진 등록') + '</button>' : '') +
                 (view.key ? '<button type="button" class="link-btn" data-sethero hidden>⭐ 이 사진을 대표로</button>' : '') +
               '</div>' +
               '<div class="pd-info">' +
@@ -8619,6 +8725,8 @@
       capBox.textContent = [p.desc, p.credit ? '출처: ' + p.credit : ''].filter(Boolean).join(' · ');
       var hb = sheet.querySelector('[data-sethero]');
       if (hb) hb.hidden = cur === 0 || photos.length < 2;
+      var dbtn = sheet.querySelector('[data-delphoto]');
+      if (dbtn) { dbtn.hidden = false; dbtn.dataset.sure = ''; dbtn.textContent = p.own ? '🗑 이 사진 지우기' : '🗑 이 사진 빼기'; }
       Array.prototype.forEach.call(thumbBox.children, function (b, k) { b.setAttribute('aria-current', k === cur ? 'true' : 'false'); });
     }
     function renderThumbs() {
@@ -8636,7 +8744,7 @@
     async function addPhotos(list) {
       var seen = {};
       photos.forEach(function (p) { seen[p.url] = 1; });
-      list = list.filter(function (p) { return p && p.url && !seen[p.url] && (seen[p.url] = 1); }).slice(0, MAX_PHOTOS);
+      list = list.filter(function (p) { return p && p.url && (p.own || !ppHidden(view.key, p.url)) && !seen[p.url] && (seen[p.url] = 1); }).slice(0, MAX_PHOTOS);
       var ok = await Promise.all(list.map(loadable));
       if (!sheet.isConnected) return;
       var before = photos.length;
@@ -8660,11 +8768,16 @@
     var placePromise = view.detailApi ? placeDetail(view.detailApi) : null;
     var morePromise = heritagePromise || placePromise;
     (async function () {
-      await customReady;
+      await customReady; await ppReady;
       var mine = customUrl(view.key);
+      var ppMine = ppOf(view.key);
+      MAX_PHOTOS = 5 + ppMine.add.length + 1;   // 공식 사진은 지금처럼 5장까지, 내가 넣은 사진은 모두
+      var rb = sheet.querySelector('[data-restorephotos]');
+      if (rb && ppMine.hide.length) { rb.hidden = false; rb.textContent = '빼 둔 사진 다시 보기 (' + ppMine.hide.length + ')'; }
       // 내가 올린 사진은 그대로 맨 앞. 사진 주소로 고른 "대표 사진"은 아래에서 목록을 다 모은 뒤 맨 앞으로 옮긴다.
-      if (mine && /^\/api\/photos\//.test(mine)) await addPhotos([{ url: mine, desc: '내가 등록한 사진', referrer: true }]);
+      if (mine && /^\/api\/photos\//.test(mine)) await addPhotos([{ url: mine, desc: '내가 등록한 사진', referrer: true, own: true, cust: true }]);
       else if (mine) heroUrl = mine;
+      if (ppMine.add.length) await addPhotos(ppMine.add.map(function (a) { return { url: ppAddUrl(a), desc: a.desc || '내가 넣은 사진', referrer: !!a.photoId, own: true, ref: a }; }));
       if (!heroUrl && view.hero && view.hero.url) heroUrl = view.hero.url;
       if (view.pickPhotos && view.pickPhotos.length) await addPhotos(view.pickPhotos);
       if (view.morePhotos) { var mp = await view.morePhotos().catch(function () { return []; }); if (mp && mp.length) { cands = cands.concat(mp); await addPhotos(mp); } }
@@ -8678,7 +8791,7 @@
       cands = cands.concat(official);
       if (official.length) await addPhotos(official);
       // 공식 사진이 3장보다 적으면 위키미디어 공용 사진을 보탠다 (사진마다 촬영자·라이선스 표시)
-      if (photos.length < 3 && view.wikiOk && hasCoord) {
+      if (photos.length < 3 && view.wikiOk && hasCoord) {   // (내가 넣은 사진까지 세어 3장 미만일 때)
         var wk = await wikiLookup(view);
         if (wk && wk.images && wk.images.length) {
           var wl = wk.images.map(function (wi) { return { url: wi.url, desc: wi.desc || '', credit: wikiCredit(wi), src: 'wikimedia' }; });
@@ -8695,7 +8808,7 @@
             src: fromGallery ? 'gallery' : 'tour' }]);
         }
       }
-      if (heroUrl) await promoteHero(heroUrl);
+      if (heroUrl && (heroUrl === customUrl(view.key) || !ppHidden(view.key, heroUrl))) await promoteHero(heroUrl);
       if (!photos.length && hasCoord) await showPlaceMap();
     })();
     // 사진이 하나도 없으면 그 자리에 장소 위치 지도(카카오 지도)를 보여준다.
@@ -8763,6 +8876,47 @@
     }
     var photoBtn = sheet.querySelector('[data-setphoto]');
     if (photoBtn) photoBtn.addEventListener('click', function () { close(); openPhotoSheet(category, view); });
+    var addBtn = sheet.querySelector('[data-addphotos]');
+    if (addBtn) addBtn.addEventListener('click', function () { close(); openAddPhotos(category, view); });
+    var restBtn = sheet.querySelector('[data-restorephotos]');
+    if (restBtn) restBtn.addEventListener('click', async function () {
+      restBtn.disabled = true;
+      try { await ppSave({ key: view.key, action: 'unhide' }); if (view.card && view.card.isConnected && view.card.__paint) view.card.__paint(); close(); openPlaceDetail(category, view); }
+      catch (err) { restBtn.disabled = false; restBtn.textContent = '못 했어요 · 다시 누르기'; }
+    });
+    var delBtn = sheet.querySelector('[data-delphoto]');
+    if (delBtn) delBtn.addEventListener('click', async function () {
+      var p = photos[cur];
+      if (!p) return;
+      if (delBtn.dataset.sure !== '1') { delBtn.dataset.sure = '1'; delBtn.textContent = '정말 ' + (p.own ? '지워요' : '빼요') + '? 한 번 더 누르세요'; return; }
+      delBtn.disabled = true;
+      try {
+        if (p.cust || (customUrl(view.key) && customUrl(view.key) === p.url)) {   // 예전 "대표 사진"으로 등록한 것
+          await api('customimages', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: view.key }) });
+          delete custom[view.key];
+        } else if (p.own && p.ref) {
+          await ppSave({ key: view.key, action: 'remove', photoId: p.ref.photoId, url: p.ref.url });
+        } else {
+          await ppSave({ key: view.key, action: 'hide', url: p.url });
+          var rb2 = sheet.querySelector('[data-restorephotos]');
+          if (rb2) { rb2.hidden = false; rb2.textContent = '빼 둔 사진 다시 보기 (' + ppOf(view.key).hide.length + ')'; }
+        }
+        photos.splice(cur, 1);
+        renderThumbs();
+        if (photos.length) showAt(Math.min(cur, photos.length - 1));
+        else {
+          photoBox.classList.remove('has-img');
+          photoBox.innerHTML = '<div class="page-photo-ph">' + (view.ph || '📍') + '</div>';
+          capBox.textContent = '사진이 없어요 · ＋ 사진 추가로 넣을 수 있어요';
+          thumbBox.hidden = true; delBtn.hidden = true;
+        }
+        if (view.card && view.card.isConnected && view.card.__paint) view.card.__paint();
+      } catch (err) {
+        console.warn('[photo] remove failed', err);
+        delBtn.dataset.sure = ''; delBtn.textContent = '못 했어요 · 다시 누르기';
+      }
+      delBtn.disabled = false;
+    });
 
     // ----- 골프장 코스 보기
     if (view.golf && hasCoord) setupGolf(sheet, category, view, useSrc);
