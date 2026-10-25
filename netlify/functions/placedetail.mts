@@ -48,6 +48,15 @@ function tourCredit(code: unknown) {
 }
 const dateFmt = (v: string) => (/^\d{8}$/.test(v) ? `${v.slice(0, 4)}.${v.slice(4, 6)}.${v.slice(6, 8)}` : v);
 
+// 관광공사 서버가 가끔 느려 시간 초과가 난다: 한 번 더 해 보고, 그래도 안 되면 오류를 던지지 않고 "자료 없음"으로 돌려준다
+// (그래야 화면이 이미 가진 설명으로 계속 보여 주고, 저장도 하지 않아 다음에 다시 시도한다)
+async function gov(op: string, params: Record<string, string | number>, key: string) {
+  for (let i = 0; i < 2; i++) {
+    try { return await callGovApi(TOUR_BASE, op, key, params, 6000); } catch (_) { /* 한 번 더 */ }
+  }
+  return { ok: false, items: [] as any[], resultCode: 'timeout', resultMsg: 'upstream timeout' } as any;
+}
+
 export default async (req: Request, _context: Context) => {
   if (req.method === 'OPTIONS') return corsPreflightResponse();
   const denied = await guard(req);
@@ -58,6 +67,7 @@ export default async (req: Request, _context: Context) => {
     let id = q.get('id') || '';
     let type = q.get('type') || '';
     const debug = q.get('debug') === '1';
+    const t0 = Date.now();
     const store = getStore('cache');
     const key = Netlify.env.get('TOUR_API_KEY') || FALLBACK_KEY;
     let matched = '';
@@ -77,7 +87,8 @@ export default async (req: Request, _context: Context) => {
         const keywords = Array.from(new Set([name, ...(isForest && core.length >= 2 ? [core + '자연휴양림', core] : [])]));
         let best: any = null, anyOk = false;
         for (const kw of keywords) {
-          const r = await callGovApi(TOUR_BASE, 'searchKeyword2', key, { keyword: kw, numOfRows: 30, arrange: 'A' });
+          if (Date.now() - t0 > 16000) break;   // 너무 오래 걸리면 더 찾지 않는다
+          const r = await gov('searchKeyword2', { keyword: kw, numOfRows: 30, arrange: 'A' }, key);
           if (r.ok || r.items.length) anyOk = true;
           let b: any = null, bestD = Infinity;
           for (const it of r.items) {
@@ -107,9 +118,9 @@ export default async (req: Request, _context: Context) => {
       if (hit) return jsonResponse({ ...hit, matched, cached: true });
     }
     const [common, intro, image] = await Promise.all([
-      callGovApi(TOUR_BASE, 'detailCommon2', key, { contentId: id }),
-      callGovApi(TOUR_BASE, 'detailIntro2', key, { contentId: id, contentTypeId: type }),
-      callGovApi(TOUR_BASE, 'detailImage2', key, { contentId: id, imageYN: 'Y' }),
+      gov('detailCommon2', { contentId: id }, key),
+      gov('detailIntro2', { contentId: id, contentTypeId: type }, key),
+      gov('detailImage2', { contentId: id, imageYN: 'Y' }, key),
     ]);
     const c: any = common.items[0] || {};
     const it: any = intro.items[0] || {};
@@ -138,6 +149,7 @@ export default async (req: Request, _context: Context) => {
     };
     if (matched) out.matched = matched;
     const ok = common.ok || intro.ok || image.ok;
+    if (!ok) out.partial = true;   // 관광공사가 응답하지 않음: 저장하지 않고 화면이 나중에 다시 시도하게 한다
     if (debug) out.debug = { common: [common.resultCode, common.resultMsg, Object.keys(c)], intro: [intro.resultCode, Object.keys(it)], image: [image.resultCode, image.items.length] };
     else if (ok) await store.setJSON(cKey, out);
     return jsonResponse(out);

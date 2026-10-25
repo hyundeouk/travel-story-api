@@ -601,6 +601,8 @@
   .pk-badge { background: #e8590c; }
   .sheet-backdrop > .sheet.admin-page .sheet-head { position: sticky; top: 0; z-index: 3; background: var(--bg); padding: calc(10px + env(safe-area-inset-top, 0px)) 18px 10px; margin: 0; border-bottom: 1px solid var(--line); }
   .sheet-backdrop > .sheet.admin-page { padding: 0; display: block; }
+  /* 전체 화면 창 규칙(.sheet-backdrop.full .sheet.page = 높이 고정 + 넘치면 숨김)이 이 창의 스크롤을 막았다 → 이 창은 통째로 스크롤 */
+  .sheet-backdrop.full .sheet.page.admin-page { display: block; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
   .admin-page [data-abody] { padding: 14px 18px 24px; display: flex; flex-direction: column; gap: 14px; }
   .admin-link { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--surface); }
   .admin-link .admin-note { margin-top: 0; }
@@ -3422,7 +3424,8 @@
   function placeDetail(r) {
     var key = placeQuery(r);
     if (!placeCache[key]) {
-      placeCache[key] = api('placedetail?' + key);
+      placeCache[key] = api('placedetail?' + key, { quiet: true });   // 관광공사가 느려 실패해도 이미 가진 설명으로 보여 주므로 오류 기록으로 올리지 않는다
+      placeCache[key].then(function (d) { if (d && d.partial) delete placeCache[key]; }, function () {});   // 일부만 받았으면 저장해 두지 않고 다음에 다시
       placeCache[key].catch(function () { delete placeCache[key]; });
     }
     return placeCache[key];
@@ -3447,7 +3450,9 @@
     vwCache[box] = (async function () {
       var lines = [];
       for (var page = 1; page <= 3; page++) {
-        var d = await vworldJsonp(key, box, page, domain);
+        var d;
+        try { d = await vworldJsonp(key, box, page, domain); }
+        catch (e1) { await new Promise(function (r0) { setTimeout(r0, 1200); }); d = await vworldJsonp(key, box, page, domain); }   // 일시적인 연결 실패는 한 번 더
         var r = (d && d.response) || {};
         if (r.status === 'NOT_FOUND') break;
         if (r.status !== 'OK') throw new Error((r.error && (r.error.code || r.error.text)) || r.status || '알 수 없는 응답');
@@ -7390,10 +7395,88 @@
     // ---- 날씨 받기
     function pos() { if (geo && geo.pos) return geo.pos; var sv = geoSaved(); return sv ? { lat: sv.lat, lng: sv.lng } : SEOUL; }
     function parseHM(s) { var m = /T(\d\d):(\d\d)/.exec(s || ''); return m ? Number(m[1]) + Number(m[2]) / 60 : null; }
+    // ---- 위성(히마와리) 사진에서 내 위치 주변 구름 비율 재기: NASA GIBS 타일(브라우저에서 바로 읽을 수 있게 공개된 자료)
+    var SAT_KEY = 'ts.satcfg';
+    var SAT_CANDS = [['Himawari_AHI_Band3_Red_Visible_1km', 'GoogleMapsCompatible_Level7', 7], ['Himawari_AHI_Band3_Red_Visible_1km', 'GoogleMapsCompatible_Level6', 6]];
+    function satTile(lat, lng, z) {
+      var n = Math.pow(2, z), r = lat * Math.PI / 180;
+      var x = (lng + 180) / 360 * n, y = (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n;
+      return { tx: Math.floor(x), ty: Math.floor(y), px: (x - Math.floor(x)) * 256, py: (y - Math.floor(y)) * 256 };
+    }
+    function satLoad(c, t) {
+      return new Promise(function (res, rej) {
+        var img = new Image(), to = setTimeout(function () { img.src = ''; rej(new Error('timeout')); }, 12000);
+        img.crossOrigin = 'anonymous';
+        img.onload = function () { clearTimeout(to); res(img); };
+        img.onerror = function () { clearTimeout(to); rej(new Error('img')); };
+        img.src = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/' + c[0] + '/default/default/' + c[1] + '/' + c[2] + '/' + t.ty + '/' + t.tx + '.png';
+      });
+    }
+    // 타일 한 장에서 구름 비율(0~100)을 계산. 어둡다=땅·바다, 밝다=구름. 못 믿겠으면 null.
+    function satPct(img, t) {
+      var cv2 = document.createElement('canvas'); cv2.width = 256; cv2.height = 256;
+      var c2 = cv2.getContext('2d', { willReadFrequently: true });
+      c2.drawImage(img, 0, 0, 256, 256);
+      var d = c2.getImageData(0, 0, 256, 256).data, hist = new Array(256).fill(0), tot = 0, i;
+      for (i = 0; i < d.length; i += 4) { if (d[i + 3] < 200) continue; var g = Math.round((d[i] + d[i + 1] + d[i + 2]) / 3); hist[g]++; tot++; }
+      if (tot < 256 * 256 * 0.6) return null;                       // 비어 있는(자료 없는) 타일
+      var acc = 0, p10 = 0, p90 = 255, sum = 0;
+      for (i = 0; i < 256; i++) { sum += i * hist[i]; }
+      for (i = 0; i < 256; i++) { acc += hist[i]; if (!p10 && acc >= tot * 0.1) p10 = i; if (acc >= tot * 0.9) { p90 = i; break; } }
+      // 오츠 방법으로 어두움/밝음 경계를 찾고, 너무 어둡거나 밝은 값으로 쏠리지 않게 범위를 제한
+      var wB = 0, sB = 0, best = -1, thr = 128;
+      for (i = 0; i < 256; i++) {
+        wB += hist[i]; if (!wB) continue;
+        var wF = tot - wB; if (!wF) break;
+        sB += i * hist[i];
+        var mB = sB / wB, mF = (sum - sB) / wF, v = wB * wF * (mB - mF) * (mB - mF);
+        if (v > best) { best = v; thr = i; }
+      }
+      thr = clamp(thr, 105, 170);
+      if (p10 > 150) thr = Math.min(thr, p10 - 1);                 // 타일 전체가 밝으면(온통 구름) 전부 구름으로
+      var R = 20, x0 = clamp(Math.round(t.px) - R, 0, 255 - 2 * R), y0 = clamp(Math.round(t.py) - R, 0, 255 - 2 * R), n = 0, cl = 0, x, y;
+      for (y = y0; y <= y0 + 2 * R; y++) for (x = x0; x <= x0 + 2 * R; x++) {
+        var k = (y * 256 + x) * 4; if (d[k + 3] < 200) continue;
+        n++; if ((d[k] + d[k + 1] + d[k + 2]) / 3 >= thr) cl++;
+      }
+      return n ? Math.round(cl / n * 100) : null;
+    }
+    function satCloud(la, lo) {
+      var cands = SAT_CANDS.slice();
+      try { var sv = JSON.parse(localStorage.getItem(SAT_KEY) || 'null'); if (sv && sv.i >= 0 && sv.i < cands.length) cands = [cands[sv.i]].concat(cands.filter(function (_, j) { return j !== sv.i; })); } catch (_) {}
+      var idx = 0;
+      function next() {
+        if (idx >= cands.length) return Promise.resolve(null);
+        var c = cands[idx++], t = satTile(la, lo, c[2]);
+        return satLoad(c, t).then(function (img) {
+          var p = satPct(img, t);
+          if (p == null) return next();
+          try { localStorage.setItem(SAT_KEY, JSON.stringify({ i: SAT_CANDS.indexOf(c) })); } catch (_) {}
+          return p;
+        }).catch(function () { return next(); });
+      }
+      return next();
+    }
+    // 구름 비율(%) → 하늘 단계: 맑음(0) / 구름많음(2) / 흐림(3)
+    function cloudLevel(pct) { return pct >= 80 ? 3 : pct >= 35 ? 2 : 0; }
+    function levelOf(kc) { return kc === 3 ? 3 : kc === 2 ? 2 : kc === 0 || kc === 1 ? 0 : -1; }
+    function applyCloud() {
+      if (!wx) return;
+      var kc = wx.kc != null ? wx.kc : wx.code, cur0 = levelOf(kc);
+      if (cur0 < 0) return;                                          // 비·눈·안개·뇌우는 그대로 둔다
+      var pcts = [];
+      if (wx.sat != null && wx.satDay) pcts.push(wx.sat);            // 위성(낮에만 믿는다)
+      if (wx.cc != null) pcts.push(wx.cc);                           // 모델 구름량
+      if (!pcts.length) return;
+      var lv = Math.max.apply(null, pcts.map(cloudLevel));
+      if (lv > cur0) {                                               // 기상청 값보다 구름이 많게 보일 때만 올린다
+        wx.kc = lv; wx.kt = lv === 3 ? '흐림' : '구름많음'; wx.adj = 1;
+      }
+    }
     function fetchWx(force) {
       if (mode === 'off' || fetching) return;
       var p = pos(), la = Math.round(p.lat * 10) / 10, lo = Math.round(p.lng * 10) / 10;
-      if (!force && wx && wx.la === la && wx.lo === lo && wx.v === 2 && Date.now() - wx.at < 25 * 60e3) return;
+      if (!force && wx && wx.la === la && wx.lo === lo && wx.v === 3 && Date.now() - wx.at < 25 * 60e3) return;
       fetching = true;
       var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + la + '&longitude=' + lo + '&current=temperature_2m,weather_code,cloud_cover&daily=sunrise,sunset&timezone=Asia%2FSeoul&forecast_days=1';
       // 하늘 상태(맑음·구름많음·흐림·비·눈)는 기상청 값을 우선 쓰고, 못 받으면 Open-Meteo 값으로 대신한다
@@ -7415,13 +7498,9 @@
         if (!j && !(k && (k.pty || k.sky))) throw new Error('no data');
         var d0 = j && j.daily && j.daily.sunrise && j.daily.sunrise[0];
         var old = wx || {};
-        wx = { v: 2, la: la, lo: lo, at: Date.now(), code: j ? j.current.weather_code : (old.code != null ? old.code : 1), temp: k && k.tmp != null ? k.tmp : (j ? j.current.temperature_2m : old.temp),
+        wx = { v: 3, la: la, lo: lo, at: Date.now(), code: j ? j.current.weather_code : (old.code != null ? old.code : 1), temp: k && k.tmp != null ? k.tmp : (j ? j.current.temperature_2m : old.temp),
                sr: j ? parseHM(d0) : old.sr, ss: j ? parseHM(j.daily.sunset && j.daily.sunset[0]) : old.ss, ymd: d0 ? d0.slice(0, 10) : old.ymd };
-        if (!(k && (k.pty || k.sky)) && j && j.current.cloud_cover != null && wx.code <= 3) {   // 기상청 값이 없으면 구름양으로 보정
-          var cc = Number(j.current.cloud_cover);
-          if (cc >= 85) { wx.kc = 3; wx.kt = '흐림'; } else if (cc >= 55 && wx.code < 2) { wx.kc = 2; wx.kt = '구름많음'; }
-          else if (cc >= 55) { wx.kt = '구름많음'; }
-        }
+        if (j && j.current.cloud_cover != null) wx.cc = Number(j.current.cloud_cover); else if (old.cc != null && old.la === la && old.lo === lo) wx.cc = old.cc;
         if (k && (k.pty || k.sky)) {
           var omk = kindOf(wx.code), kc, kt;
           if (k.pty) {
@@ -7431,8 +7510,23 @@
           } else { kc = { 1: 0, 3: 2, 4: 3 }[k.sky]; kt = { 1: '맑음', 3: '구름많음', 4: '흐림' }[k.sky]; }
           if (kc != null) { wx.kc = kc; wx.kt = kt; wx.src = 'kma'; }
         }
+        wx.kc0 = wx.kc != null ? wx.kc : wx.code; wx.kt0 = wx.kt || ''; wx.src0 = wx.src;   // 기상청(또는 Open-Meteo) 원래 값을 따로 남겨 둔다
+        applyCloud();
         try { localStorage.setItem(WX_KEY, JSON.stringify(wx)); } catch (_) {}
         refresh();
+        // 위성 사진은 늦게 오므로 먼저 위의 값으로 그린 뒤, 도착하면 한 번 더 보정한다
+        var ok = wx.sr != null && wx.ss != null;
+        var hnow = (new Date(Date.now() + (new Date().getTimezoneOffset() + 540) * 60000)).getHours() + (new Date().getMinutes() / 60);
+        var daySat = ok && hnow >= wx.sr + 1.5 && hnow <= wx.ss - 1.5;
+        if (!daySat) { wx.sat = null; wx.satDay = false; return; }
+        return satCloud(p.lat, p.lng).then(function (pc) {
+          if (pc == null) return;
+          wx.sat = pc; wx.satDay = true; wx.satAt = Date.now();
+          wx.kc = wx.kc0; wx.kt = wx.kt0; wx.src = wx.src0; wx.adj = 0;
+          applyCloud();
+          try { localStorage.setItem(WX_KEY, JSON.stringify(wx)); } catch (_) {}
+          refresh();
+        });
       }).catch(function () { /* 날씨를 못 받으면 시간대 색만 보여 준다 */ }).then(function () { fetching = false; });
     }
 
@@ -7482,7 +7576,11 @@
     paintBtn();
     if (mode !== 'off') { build(); paintLine(); fetchWx(false); }
     try { var mq = window.matchMedia('(prefers-color-scheme: dark)'); (mq.addEventListener ? mq.addEventListener('change', function () { setTimeout(tick, 50); }) : 0); } catch (_) {}
-    return { setMode: setMode, refresh: refresh, tick: tick };
+    function info() {
+      if (!wx || wx.code == null) return null;
+      return { la: wx.la, lo: wx.lo, sat: wx.satDay ? wx.sat : null, cc: wx.cc, kma: wx.kt0 || '', adj: !!wx.adj, now: wx.kt || '' };
+    }
+    return { setMode: setMode, refresh: refresh, tick: tick, info: info };
   })();
 
   // ================= 내 사진 등록 =================
@@ -8188,6 +8286,18 @@
     var d = new Date(Date.now() + 9 * 3600 * 1000);
     return d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0');
   }
+  // 하늘 배경의 구름 판단 근거(위성·모델·기상청)를 한 줄로 — 내 위치 근처를 볼 때만
+  function skyNote(view) {
+    try {
+      var i = sky.info();
+      if (!i || view.lat == null || Math.abs(Number(view.lat) - i.la) > 0.3 || Math.abs(Number(view.lng) - i.lo) > 0.3) return '';
+      var parts = [];
+      if (i.sat != null) parts.push('위성 ' + i.sat + '%');
+      if (i.cc != null) parts.push('모델 ' + Math.round(i.cc) + '%');
+      if (i.kma) parts.push('기상청 ' + i.kma);
+      return parts.length ? '<br><small class="copy-hint">☁️ 구름 판단: ' + escapeHtml(parts.join(' · ')) + (i.adj ? ' → 하늘 배경은 ' + escapeHtml(i.now) + '로 표시' : '') + '</small>' : '';
+    } catch (_) { return ''; }
+  }
   function renderWeather(sheet, view, w) {
     var daysBox = sheet.querySelector('[data-wxdays]');
     var hoursBox = sheet.querySelector('[data-wxhours]');
@@ -8261,7 +8371,7 @@
           '<span class="big">' + Math.round(n.tmp * 10) / 10 + '°</span>' +
           '<div class="det"><b>지금' + (ic0[1] ? ' · ' + escapeHtml(ic0[1]) : '') + '</b><br>' +
           [n.reh != null ? '습도 ' + Math.round(n.reh) + '%' : '', n.wsd != null ? '바람 ' + n.wsd + 'm/s' + (n.vec != null ? ' (' + wxDir(n.vec) + ')' : '') : '', n.rn1 ? '1시간 강수 ' + n.rn1 + 'mm' : ''].filter(Boolean).join(' · ') +
-          (nb.length >= 12 ? '<br><small class="copy-hint">' + Number(nb.slice(8, 10)) + '시 관측(기상청 초단기실황)</small>' : '') + '</div>';
+          (nb.length >= 12 ? '<br><small class="copy-hint">' + Number(nb.slice(8, 10)) + '시 관측(기상청 초단기실황)</small>' : '') + skyNote(view) + '</div>';
       }
     }
     var srcBox = sheet.querySelector('[data-wxsrc]');
@@ -8867,7 +8977,7 @@
             mini.fitBounds(boundsOf(all2.concat([[view.lat, view.lng]])), { top: 24, right: 24, bottom: 24, left: 24 });
           }
         }).catch(function (err) {
-          console.error('[mtnpaths] failed', err);
+          console.warn('[mtnpaths] failed', err);   // 화면에 안내 문구가 나오므로 오류 기록으로는 올리지 않는다
           if (sheet.isConnected) otherNote('그 밖의 등산로(브이월드)를 불러오지 못했어요' + (err && err.message ? ' — ' + err.message : '') + '.', true);
         });
       }

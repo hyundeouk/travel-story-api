@@ -2160,7 +2160,7 @@ function extractResultCode(data) {
     resultMsg: data?.response?.header?.resultMsg ?? data?.resultMsg
   };
 }
-async function callGovApi(baseUrl, operation, serviceKey, params) {
+async function callGovApi(baseUrl, operation, serviceKey, params, timeoutMs = 8e3) {
   const url = new URL(`${baseUrl}/${operation}`);
   url.searchParams.set("serviceKey", serviceKey);
   url.searchParams.set("MobileOS", "ETC");
@@ -2172,7 +2172,7 @@ async function callGovApi(baseUrl, operation, serviceKey, params) {
     if (value === void 0 || value === null || value === "") continue;
     url.searchParams.set(key, String(value));
   }
-  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8e3) });
+  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(timeoutMs) });
   const text3 = await res.text();
   const data = await parseMaybeXml(text3);
   const { resultCode, resultMsg } = extractResultCode(data);
@@ -5199,6 +5199,15 @@ function tourCredit(code) {
   return "\uD55C\uAD6D\uAD00\uAD11\uACF5\uC0AC" + (m ? ` \xB7 \uACF5\uACF5\uB204\uB9AC \uC81C${m[1]}\uC720\uD615` : "");
 }
 var dateFmt = (v) => /^\d{8}$/.test(v) ? `${v.slice(0, 4)}.${v.slice(4, 6)}.${v.slice(6, 8)}` : v;
+async function gov(op, params, key) {
+  for (let i = 0; i < 2; i++) {
+    try {
+      return await callGovApi(TOUR_BASE5, op, key, params, 6e3);
+    } catch (_) {
+    }
+  }
+  return { ok: false, items: [], resultCode: "timeout", resultMsg: "upstream timeout" };
+}
 var placedetail_default = async (req, _context) => {
   if (req.method === "OPTIONS") return corsPreflightResponse();
   const denied = await guard(req);
@@ -5208,6 +5217,7 @@ var placedetail_default = async (req, _context) => {
     let id = q.get("id") || "";
     let type = q.get("type") || "";
     const debug = q.get("debug") === "1";
+    const t0 = Date.now();
     const store13 = getStore("cache");
     const key = Netlify.env.get("TOUR_API_KEY") || FALLBACK_KEY11;
     let matched = "";
@@ -5225,7 +5235,8 @@ var placedetail_default = async (req, _context) => {
         const keywords = Array.from(/* @__PURE__ */ new Set([name, ...isForest && core.length >= 2 ? [core + "\uC790\uC5F0\uD734\uC591\uB9BC", core] : []]));
         let best = null, anyOk = false;
         for (const kw of keywords) {
-          const r = await callGovApi(TOUR_BASE5, "searchKeyword2", key, { keyword: kw, numOfRows: 30, arrange: "A" });
+          if (Date.now() - t0 > 16e3) break;
+          const r = await gov("searchKeyword2", { keyword: kw, numOfRows: 30, arrange: "A" }, key);
           if (r.ok || r.items.length) anyOk = true;
           let b = null, bestD = Infinity;
           for (const it2 of r.items) {
@@ -5261,9 +5272,9 @@ var placedetail_default = async (req, _context) => {
       if (hit) return jsonResponse({ ...hit, matched, cached: true });
     }
     const [common, intro, image] = await Promise.all([
-      callGovApi(TOUR_BASE5, "detailCommon2", key, { contentId: id }),
-      callGovApi(TOUR_BASE5, "detailIntro2", key, { contentId: id, contentTypeId: type }),
-      callGovApi(TOUR_BASE5, "detailImage2", key, { contentId: id, imageYN: "Y" })
+      gov("detailCommon2", { contentId: id }, key),
+      gov("detailIntro2", { contentId: id, contentTypeId: type }, key),
+      gov("detailImage2", { contentId: id, imageYN: "Y" }, key)
     ]);
     const c = common.items[0] || {};
     const it = intro.items[0] || {};
@@ -5289,6 +5300,7 @@ var placedetail_default = async (req, _context) => {
     };
     if (matched) out.matched = matched;
     const ok = common.ok || intro.ok || image.ok;
+    if (!ok) out.partial = true;
     if (debug) out.debug = { common: [common.resultCode, common.resultMsg, Object.keys(c)], intro: [intro.resultCode, Object.keys(it)], image: [image.resultCode, image.items.length] };
     else if (ok) await store13.setJSON(cKey, out);
     return jsonResponse(out);

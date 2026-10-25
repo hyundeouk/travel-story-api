@@ -54,7 +54,8 @@ export async function callGovApi(
   baseUrl: string,
   operation: string,
   serviceKey: string,
-  params: GovApiParams
+  params: GovApiParams,
+  timeoutMs = 8000
 ): Promise<GovApiResult> {
   const url = new URL(`${baseUrl}/${operation}`);
   url.searchParams.set('serviceKey', serviceKey);
@@ -68,7 +69,7 @@ export async function callGovApi(
     url.searchParams.set(key, String(value));
   }
 
-  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
+  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(timeoutMs) });
   const text = await res.text();
   const data = await parseMaybeXml(text);
   const { resultCode, resultMsg } = extractResultCode(data);
