@@ -32,11 +32,23 @@ function itemsOf(data: any): any[] {
   if (items && !Array.isArray(items)) items = Array.isArray(items.item) ? items.item : items.item ? [items.item] : [];
   return items || [];
 }
-async function getJson(url: string) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
+async function getJson(url: string, ms = 9000) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(ms) });
   const text = await res.text();
   if (looksUnregistered(res.status, text)) throw new NeedApply();
   try { return JSON.parse(text); } catch { throw new Error(`not json (${res.status}) ${text.slice(0, 120)}`); }
+}
+
+// 기상청 서버는 한참 쉬었다 처음 부르면 느리거나 끊기는 일이 잦다 → 한 번 더 시도하되, 전체 시간(deadline)을 넘기지 않는다
+async function getJsonRetry(url: string, deadline: number) {
+  let lastErr: any;
+  for (let i = 0; i < 2; i++) {
+    const left = deadline - Date.now();
+    if (left < 1500) break;
+    try { return await getJson(url, Math.min(i === 0 ? 6500 : 8000, left)); }
+    catch (err) { if (err instanceof NeedApply) throw err; lastErr = err; }
+  }
+  throw lastErr || new Error('timeout');
 }
 
 // 기상청 격자 변환 (Lambert Conformal Conic, 기상청 동네예보 격자 5km)
@@ -81,7 +93,7 @@ function prevBase(b: { date: string; time: string }) {
 
 const num = (v: any) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 
-async function forecast(lat: number, lng: number, key: string, store: any) {
+async function forecastFresh(lat: number, lng: number, key: string, store: any, deadline: number) {
   const { nx, ny } = toGrid(lat, lng);
   let base = latestBase();
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -89,7 +101,7 @@ async function forecast(lat: number, lng: number, key: string, store: any) {
     const hit: any = await store.get(cKey, { type: 'json' });
     if (hit) return { ...hit, cached: true };
     const url = `${FCST_API}?serviceKey=${encodeURIComponent(key)}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${base.date}&base_time=${base.time}&nx=${nx}&ny=${ny}`;
-    const items = itemsOf(await getJson(url));
+    const items = itemsOf(await getJsonRetry(url, deadline));
     if (!items.length) { base = prevBase(base); continue; } // 아직 발표 전이면 한 번 앞의 발표분
     const byTime = new Map<string, any>();
     const days = new Map<string, any>();
@@ -146,8 +158,28 @@ async function forecast(lat: number, lng: number, key: string, store: any) {
   return { nx, ny, none: true, days: [], hours: [] };
 }
 
+// 기상청이 느리거나 끊겨도 "마지막으로 받은 예보"를 대신 보여 준다 (격자마다 따로 저장)
+async function forecast(lat: number, lng: number, key: string, store: any, deadline: number) {
+  const { nx, ny } = toGrid(lat, lng);
+  const lastKey = `wx-last-v1-${nx}-${ny}`;
+  const stale = async () => {
+    const last: any = await store.get(lastKey, { type: 'json' }).catch(() => null);
+    return last && last.days?.length && Date.now() - (last.at || 0) < 30 * 3600 * 1000 ? { ...last, cached: true, stale: true } : null;
+  };
+  try {
+    const f: any = await forecastFresh(lat, lng, key, store, deadline);
+    if (f?.days?.length) { if (!f.cached) await store.setJSON(lastKey, f).catch(() => {}); return f; }
+    return (await stale()) || f;
+  } catch (err) {
+    if (err instanceof NeedApply) throw err;
+    const s = await stale();
+    if (s) return s;
+    throw err;
+  }
+}
+
 // 초단기실황(지금 관측값): 매시 정각 자료가 40분쯤 나온다 → 45분 전 시각의 정각 자료, 없으면 한 시간 앞
-async function nowcast(lat: number, lng: number, key: string, store: any) {
+async function nowcast(lat: number, lng: number, key: string, store: any, deadline: number) {
   const { nx, ny } = toGrid(lat, lng);
   for (const back of [45, 105]) {
     const k = kstParts(Date.now() - back * 60 * 1000);
@@ -156,7 +188,9 @@ async function nowcast(lat: number, lng: number, key: string, store: any) {
     const hit: any = await store.get(cKey, { type: 'json' });
     if (hit) return hit;
     const url = `${NOW_API}?serviceKey=${encodeURIComponent(key)}&pageNo=1&numOfRows=20&dataType=JSON&base_date=${base.date}&base_time=${base.time}&nx=${nx}&ny=${ny}`;
-    const items = itemsOf(await getJson(url));
+    let items: any[];
+    try { items = itemsOf(await getJsonRetry(url, deadline)); }
+    catch (err) { if (err instanceof NeedApply) throw err; continue; }   // 이 시각 자료를 못 받으면 한 시간 앞 자료로
     if (!items.length) continue;
     const o: any = { base: base.date + base.time };
     for (const it of items) {
@@ -227,12 +261,13 @@ export default async (req: Request, _context: Context) => {
   const apply: any[] = [];
   const out: any = { apply };
 
+  const deadline = Date.now() + 20000;
   const jobs: Promise<void>[] = [
-    forecast(lat, lng, key, store).then((f) => { out.fcst = f; }).catch((err) => {
+    forecast(lat, lng, key, store, deadline).then((f) => { out.fcst = f; }).catch((err) => {
       if (err instanceof NeedApply) apply.push(DATASETS.fcst); else out.fcstError = String(err?.message || err).slice(0, 160);
     }),
   ];
-  jobs.push(nowcast(lat, lng, key, store).then((n) => { if (n) out.now = n; }).catch(() => { /* 실황이 없어도 예보는 보여준다 */ }));
+  jobs.push(nowcast(lat, lng, key, store, deadline).then((n) => { if (n) out.now = n; }).catch(() => { /* 실황이 없어도 예보는 보여준다 */ }));
   if (mt.length >= 2) {
     jobs.push(mountainObs(mt, key, store).then((m) => { out.mt = m; }).catch((err) => {
       if (err instanceof NeedApply) apply.push(DATASETS.mt); else out.mtError = String(err?.message || err).slice(0, 160);

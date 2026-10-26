@@ -5779,8 +5779,8 @@ function itemsOf(data) {
   if (items && !Array.isArray(items)) items = Array.isArray(items.item) ? items.item : items.item ? [items.item] : [];
   return items || [];
 }
-async function getJson(url) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(9e3) });
+async function getJson(url, ms = 9e3) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(ms) });
   const text3 = await res.text();
   if (looksUnregistered3(res.status, text3)) throw new NeedApply2();
   try {
@@ -5788,6 +5788,20 @@ async function getJson(url) {
   } catch {
     throw new Error(`not json (${res.status}) ${text3.slice(0, 120)}`);
   }
+}
+async function getJsonRetry(url, deadline) {
+  let lastErr;
+  for (let i = 0; i < 2; i++) {
+    const left = deadline - Date.now();
+    if (left < 1500) break;
+    try {
+      return await getJson(url, Math.min(i === 0 ? 6500 : 8e3, left));
+    } catch (err) {
+      if (err instanceof NeedApply2) throw err;
+      lastErr = err;
+    }
+  }
+  throw lastErr || new Error("timeout");
 }
 function toGrid(lat, lng) {
   const RE = 6371.00877, GRID = 5, SLAT1 = 30, SLAT2 = 60, OLON = 126, OLAT = 38, XO = 43, YO = 136;
@@ -5828,7 +5842,7 @@ var num11 = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
-async function forecast(lat, lng, key, store14) {
+async function forecastFresh(lat, lng, key, store14, deadline) {
   const { nx, ny } = toGrid(lat, lng);
   let base = latestBase();
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -5836,7 +5850,7 @@ async function forecast(lat, lng, key, store14) {
     const hit = await store14.get(cKey, { type: "json" });
     if (hit) return { ...hit, cached: true };
     const url = `${FCST_API}?serviceKey=${encodeURIComponent(key)}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${base.date}&base_time=${base.time}&nx=${nx}&ny=${ny}`;
-    const items = itemsOf(await getJson(url));
+    const items = itemsOf(await getJsonRetry(url, deadline));
     if (!items.length) {
       base = prevBase(base);
       continue;
@@ -5915,7 +5929,29 @@ async function forecast(lat, lng, key, store14) {
   }
   return { nx, ny, none: true, days: [], hours: [] };
 }
-async function nowcast(lat, lng, key, store14) {
+async function forecast(lat, lng, key, store14, deadline) {
+  const { nx, ny } = toGrid(lat, lng);
+  const lastKey = `wx-last-v1-${nx}-${ny}`;
+  const stale = async () => {
+    const last = await store14.get(lastKey, { type: "json" }).catch(() => null);
+    return last && last.days?.length && Date.now() - (last.at || 0) < 30 * 3600 * 1e3 ? { ...last, cached: true, stale: true } : null;
+  };
+  try {
+    const f = await forecastFresh(lat, lng, key, store14, deadline);
+    if (f?.days?.length) {
+      if (!f.cached) await store14.setJSON(lastKey, f).catch(() => {
+      });
+      return f;
+    }
+    return await stale() || f;
+  } catch (err) {
+    if (err instanceof NeedApply2) throw err;
+    const s = await stale();
+    if (s) return s;
+    throw err;
+  }
+}
+async function nowcast(lat, lng, key, store14, deadline) {
   const { nx, ny } = toGrid(lat, lng);
   for (const back of [45, 105]) {
     const k = kstParts(Date.now() - back * 60 * 1e3);
@@ -5924,7 +5960,13 @@ async function nowcast(lat, lng, key, store14) {
     const hit = await store14.get(cKey, { type: "json" });
     if (hit) return hit;
     const url = `${NOW_API}?serviceKey=${encodeURIComponent(key)}&pageNo=1&numOfRows=20&dataType=JSON&base_date=${base.date}&base_time=${base.time}&nx=${nx}&ny=${ny}`;
-    const items = itemsOf(await getJson(url));
+    let items;
+    try {
+      items = itemsOf(await getJsonRetry(url, deadline));
+    } catch (err) {
+      if (err instanceof NeedApply2) throw err;
+      continue;
+    }
     if (!items.length) continue;
     const o = { base: base.date + base.time };
     for (const it of items) {
@@ -6010,15 +6052,16 @@ var weather_default = async (req, _context) => {
   const store14 = getStore("cache");
   const apply = [];
   const out = { apply };
+  const deadline = Date.now() + 2e4;
   const jobs = [
-    forecast(lat, lng, key, store14).then((f) => {
+    forecast(lat, lng, key, store14, deadline).then((f) => {
       out.fcst = f;
     }).catch((err) => {
       if (err instanceof NeedApply2) apply.push(DATASETS2.fcst);
       else out.fcstError = String(err?.message || err).slice(0, 160);
     })
   ];
-  jobs.push(nowcast(lat, lng, key, store14).then((n) => {
+  jobs.push(nowcast(lat, lng, key, store14, deadline).then((n) => {
     if (n) out.now = n;
   }).catch(() => {
   }));

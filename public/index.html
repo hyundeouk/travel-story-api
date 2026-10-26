@@ -28,7 +28,7 @@
   try {
     if (new URLSearchParams(location.search).get('k')) return; // 공유 링크로 처음 들어오면 로그인 확인이 먼저
     var E = window.__early = {};
-    ['auth', 'mapconfig', 'stories', 'fixes', 'marks', 'customimages'].forEach(function (p) {
+    ['auth', 'mapconfig', 'stories', 'fixes', 'marks', 'customimages', 'placephotos'].forEach(function (p) {
       var e = E[p] = { t: Date.now() };
       e.p = fetch('/api/' + p).then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); });
       e.p.catch(function () {});
@@ -3646,7 +3646,7 @@
   });
   // 장소마다 사진을 여러 장 더하고(add), 마음에 안 드는 공식 사진은 화면에서 빼 두는(hide) 기록
   var pphotos = {};
-  var ppReady = authReady.then(function () { return api('placephotos', { quiet: true }); }).then(function (j) { pphotos = j.items || {}; }).catch(function () {});
+  var ppReady = authReady.then(function () { return Promise.race([api('placephotos', { quiet: true }), new Promise(function (_, no) { setTimeout(no, 6000); })]); }).then(function (j) { pphotos = j.items || {}; }).catch(function () {});
   function ppOf(key) { var p = key && pphotos[key]; return { add: (p && p.add) || [], hide: (p && p.hide) || [], hero: (p && p.hero) || null }; }
   function ppAddUrl(a) { return a.photoId ? photoUrl(a.photoId) : a.url; }
   function ppHidden(key, url) { return !!(key && url) && ppOf(key).hide.indexOf(url) >= 0; }
@@ -7522,11 +7522,12 @@
     function fetchWx(force) {
       if (mode === 'off' || fetching) return;
       var p = pos(), la = Math.round(p.lat * 10) / 10, lo = Math.round(p.lng * 10) / 10;
-      if (!force && wx && wx.la === la && wx.lo === lo && wx.v === 3 && Date.now() - wx.at < 25 * 60e3) return;
+      if (!force && wx && wx.la === la && wx.lo === lo && wx.v === 3 && Date.now() - wx.at < 25 * 60e3 && (wx.src === 'kma' || Date.now() - wx.at < 150e3)) return;   // 기상청 값을 못 받았으면 2분 반 뒤 다시 시도
       fetching = true;
       var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + la + '&longitude=' + lo + '&current=temperature_2m,weather_code,cloud_cover&daily=sunrise,sunset&timezone=Asia%2FSeoul&forecast_days=1';
       // 하늘 상태(맑음·구름많음·흐림·비·눈)는 기상청 값을 우선 쓰고, 못 받으면 Open-Meteo 값으로 대신한다
-      var kmaP = fetch('/api/weather?lat=' + encodeURIComponent(p.lat) + '&lng=' + encodeURIComponent(p.lng))
+      var kctl = window.AbortController ? new AbortController() : null, ktm = kctl ? setTimeout(function () { kctl.abort(); }, 8000) : 0;   // 기상청이 느려도 하늘 배경은 먼저 그린다
+      var kmaP = fetch('/api/weather?lat=' + encodeURIComponent(p.lat) + '&lng=' + encodeURIComponent(p.lng), kctl ? { signal: kctl.signal } : undefined)
         .then(function (r) { return r.ok ? r.json() : null; }).then(function (w) {
           var n = w && w.now, hs = (w && w.fcst && w.fcst.hours) || [], h0 = hs[0];
           try {   // 지금 시각에 가장 가까운 예보 시간을 고른다
@@ -7537,7 +7538,7 @@
           var pty = Number(n.pty) || 0, sk = h0 ? Number(h0.sky) : 0;
           if (!pty && !sk) return { tmp: n.tmp };
           return { tmp: n.tmp, pty: pty, sky: sk };
-        }).catch(function () { return null; });
+        }).catch(function () { return null; }).then(function (v) { clearTimeout(ktm); return v; });
       var omP = fetch(url).then(function (r) { return r.json(); }).then(function (j) { return j && j.current ? j : null; }).catch(function () { return null; });
       Promise.all([omP, kmaP]).then(function (res) {
         var j = res[0], k = res[1];
@@ -8267,8 +8268,18 @@
     var k = Number(view.lat).toFixed(2) + ',' + Number(view.lng).toFixed(2) + '|' + mt;
     var c = wxCache[k];
     if (c && Date.now() - c.at < 10 * 60 * 1000) return c.p;
-    var p = api('weather?lat=' + encodeURIComponent(view.lat) + '&lng=' + encodeURIComponent(view.lng) + (mt ? '&mt=' + encodeURIComponent(mt) : ''))
-      .catch(function (err) { console.warn('[weather]', err); delete wxCache[k]; return { error: true }; });
+    var path = 'weather?lat=' + encodeURIComponent(view.lat) + '&lng=' + encodeURIComponent(view.lng) + (mt ? '&mt=' + encodeURIComponent(mt) : '');
+    var got = function () {   // 서버가 오래 걸리면 25초에서 끊고, 예보가 비어 오면 잠깐 뒤 한 번 더 받는다
+      var ctl = window.AbortController ? new AbortController() : null, tm = ctl ? setTimeout(function () { ctl.abort(); }, 25000) : 0;
+      return api(path, ctl ? { signal: ctl.signal } : undefined).then(function (w) { clearTimeout(tm); return w; }, function (e) { clearTimeout(tm); throw e; });
+    };
+    var p = got().catch(function () { return new Promise(function (r) { setTimeout(r, 1500); }).then(got); })
+      .then(function (w) {
+        if (w && w.fcst && w.fcst.days && w.fcst.days.length) return w;
+        return new Promise(function (r) { setTimeout(r, 1500); }).then(got).catch(function () { return w; });
+      })
+      .catch(function (err) { console.warn('[weather]', err); delete wxCache[k]; return { error: true }; })
+      .then(function (w) { if (!(w && w.fcst && w.fcst.days && w.fcst.days.length)) delete wxCache[k]; return w; });   // 실패한 결과는 저장해 두지 않는다
     wxCache[k] = { at: Date.now(), p: p };
     return p;
   }
@@ -8467,7 +8478,7 @@
         }).join('');
       }
       var b = String(f.base || '');
-      msgs.push('예보: 기상청 단기예보' + (b.length >= 12 ? ' (' + Number(b.slice(4, 6)) + '/' + Number(b.slice(6, 8)) + ' ' + b.slice(8, 10) + '시 발표, 5km 격자)' : ''));
+      msgs.push('예보: 기상청 단기예보' + (f.stale ? '(기상청 서버가 느려 마지막으로 받은 예보예요)' : '') + (b.length >= 12 ? ' (' + Number(b.slice(4, 6)) + '/' + Number(b.slice(6, 8)) + ' ' + b.slice(8, 10) + '시 발표, 5km 격자)' : ''));
       if (view.trailName) msgs.push('예보는 격자 평균 높이 기준이라 산 위는 보통 더 춥고 바람이 세요(100m 오를 때 약 0.6℃ 낮아짐).');
     } else if (apply.some(function (a) { return /단기예보/.test(a.name); })) {
       daysBox.innerHTML = '<div class="status-line err">날씨 예보를 보려면 공공데이터포털에서 "활용신청"이 필요해요.</div>';
