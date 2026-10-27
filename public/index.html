@@ -956,6 +956,7 @@
   .danger-btn { font-family: inherit; font-size: 0.9rem; font-weight: 700; border: none; border-radius: 999px; padding: 10px 20px; background: #c0392b; color: #fff; cursor: pointer; }
   .danger-btn:disabled { opacity: 0.6; cursor: default; }
   .copy-hint { font-size: 0.75rem; color: var(--ink-dim); margin-top: 4px; }
+  .gs-priv { display: none; } body.viewer .gs-priv { display: block; }
 
   [hidden] { display: none !important; }
 
@@ -1097,7 +1098,7 @@
   <main>
     <section id="view-gstory" class="view">
       <div class="gs-top">
-        <div><div class="wx-place">스토리</div><div class="copy-hint">여행 이야기를 함께 남기는 곳이에요. 공유 링크로 들어온 사람도 글과 사진을 올릴 수 있어요.</div></div>
+        <div><div class="wx-place">스토리</div><div class="copy-hint">여행 이야기를 함께 남기는 곳이에요. 공유 링크로 들어온 사람도 글과 사진을 올릴 수 있어요.</div><div class="copy-hint gs-priv">🔒 내가 올린 글과 사진은 나만의 공간이에요.</div></div>
         <div class="gs-tools"><select class="area-select" id="gs-filter" aria-label="보기"></select><button type="button" class="primary-btn gs-write" id="gs-write">✏️ 스토리 쓰기</button></div>
       </div>
       <div id="gs-status" class="status-line" hidden></div>
