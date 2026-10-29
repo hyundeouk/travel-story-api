@@ -7545,7 +7545,7 @@
     function fetchWx(force) {
       if (mode === 'off' || fetching) return;
       var p = pos(), la = Math.round(p.lat * 10) / 10, lo = Math.round(p.lng * 10) / 10;
-      if (!force && wx && wx.la === la && wx.lo === lo && wx.v === 3 && Date.now() - wx.at < 25 * 60e3 && (wx.src === 'kma' || Date.now() - wx.at < 150e3)) return;   // 기상청 값을 못 받았으면 2분 반 뒤 다시 시도
+      if (!force && wx && wx.la === la && wx.lo === lo && wx.v === 4 && Date.now() - wx.at < 12 * 60e3 && (wx.src === 'kma' || Date.now() - wx.at < 150e3)) return;   // 기상청 값을 못 받았으면 2분 반 뒤 다시 시도
       fetching = true;
       var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + la + '&longitude=' + lo + '&current=temperature_2m,weather_code,cloud_cover&daily=sunrise,sunset&timezone=Asia%2FSeoul&forecast_days=1';
       // 하늘 상태(맑음·구름많음·흐림·비·눈)는 기상청 값을 우선 쓰고, 못 받으면 Open-Meteo 값으로 대신한다
@@ -7564,7 +7564,7 @@
         if (!j && !(k && (k.pty || k.sky))) throw new Error('no data');
         var d0 = j && j.daily && j.daily.sunrise && j.daily.sunrise[0];
         var old = wx || {};
-        wx = { v: 3, la: la, lo: lo, at: Date.now(), code: j ? j.current.weather_code : (old.code != null ? old.code : 1), temp: k && k.tmp != null ? k.tmp : (j ? j.current.temperature_2m : old.temp),
+        wx = { v: 4, la: la, lo: lo, at: Date.now(), code: j ? j.current.weather_code : (old.code != null ? old.code : 1), temp: k && k.tmp != null ? k.tmp : (j ? j.current.temperature_2m : old.temp),
                sr: j ? parseHM(d0) : old.sr, ss: j ? parseHM(j.daily.sunset && j.daily.sunset[0]) : old.ss, ymd: d0 ? d0.slice(0, 10) : old.ymd };
         if (j && j.current.cloud_cover != null) wx.cc = Number(j.current.cloud_cover); else if (old.cc != null && old.la === la && old.lo === lo) wx.cc = old.cc;
         if (k && (k.pty || k.sky)) {
