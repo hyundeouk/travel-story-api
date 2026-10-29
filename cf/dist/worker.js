@@ -5758,6 +5758,7 @@ var config34 = {
 // ../netlify/functions/weather.mts
 var FALLBACK_KEY15 = "";
 var FCST_API = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst";
+var ULTRA_API = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst";
 var NOW_API = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst";
 var MT_API = "https://apis.data.go.kr/1400377/mtweather/mountListSearch";
 var DATASETS2 = {
@@ -5998,6 +5999,34 @@ async function nowcast(lat, lng, key, store14, deadline) {
   }
   return null;
 }
+async function ultra(lat, lng, key, store14, deadline) {
+  const { nx, ny } = toGrid(lat, lng);
+  const k = kstParts(Date.now() - 45 * 60 * 1e3);
+  const base = k.min >= 30 ? { date: k.date, time: String(k.hour).padStart(2, "0") + "30" } : (() => {
+    const q = kstParts(Date.now() - 45 * 60 * 1e3 - 60 * 60 * 1e3);
+    return { date: q.date, time: String(q.hour).padStart(2, "0") + "30" };
+  })();
+  const cKey = `wxu-v1-${nx}-${ny}-${base.date}${base.time}`;
+  const hit = await store14.get(cKey, { type: "json" });
+  if (hit) return hit;
+  const url = `${ULTRA_API}?serviceKey=${encodeURIComponent(key)}&pageNo=1&numOfRows=100&dataType=JSON&base_date=${base.date}&base_time=${base.time}&nx=${nx}&ny=${ny}`;
+  const items = itemsOf(await getJsonRetry(url, deadline));
+  if (!items.length) return null;
+  const byTime = /* @__PURE__ */ new Map();
+  for (const it of items) {
+    const kk = `${it.fcstDate}${it.fcstTime}`;
+    if (!byTime.has(kk)) byTime.set(kk, { d: String(it.fcstDate), t: String(it.fcstTime) });
+    const h = byTime.get(kk);
+    const v = it.fcstValue;
+    if (it.category === "SKY") h.sky = num11(v);
+    else if (it.category === "PTY") h.pty = num11(v);
+    else if (it.category === "T1H") h.tmp = num11(v);
+    else if (it.category === "RN1") h.rn1 = String(v);
+  }
+  const out = { at: Date.now(), base: base.date + base.time, hours: Array.from(byTime.values()).sort((a, b) => (a.d + a.t).localeCompare(b.d + b.t)) };
+  await store14.setJSON(cKey, out);
+  return out;
+}
 var norm5 = (s) => String(s ?? "").replace(/\s+|\(.*?\)/g, "");
 async function mountainObs(name, key, store14) {
   let all = await store14.get("mtwx-v1-all", { type: "json" });
@@ -6063,6 +6092,10 @@ var weather_default = async (req, _context) => {
   ];
   jobs.push(nowcast(lat, lng, key, store14, deadline).then((n) => {
     if (n) out.now = n;
+  }).catch(() => {
+  }));
+  jobs.push(ultra(lat, lng, key, store14, deadline).then((u) => {
+    if (u) out.ultra = u;
   }).catch(() => {
   }));
   if (mt.length >= 2) {

@@ -11,6 +11,7 @@ import { jsonResponse, corsPreflightResponse } from '../../src/lib/govApi.mts';
 // 공공데이터 인증키는 코드에 두지 않고 Cloudflare 비밀값 TOUR_API_KEY 에서 읽는다
 const FALLBACK_KEY = '';
 const FCST_API = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst';
+const ULTRA_API = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst';
 const NOW_API = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst';
 const MT_API = 'https://apis.data.go.kr/1400377/mtweather/mountListSearch';
 const DATASETS = {
@@ -211,6 +212,36 @@ async function nowcast(lat: number, lng: number, key: string, store: any, deadli
   return null;
 }
 
+// 초단기예보(앞으로 6시간): 매시 30분 자료가 45분쯤 나온다. 실황은 한 시간쯤 늦어서 지금 비가 와도 "비 없음"으로 나올 수 있어, 지금 하늘·비는 이 자료로 보충한다
+async function ultra(lat: number, lng: number, key: string, store: any, deadline: number) {
+  const { nx, ny } = toGrid(lat, lng);
+  const k = kstParts(Date.now() - 45 * 60 * 1000);
+  const base = k.min >= 30 ? { date: k.date, time: String(k.hour).padStart(2, '0') + '30' } : (() => {
+    const q = kstParts(Date.now() - 45 * 60 * 1000 - 60 * 60 * 1000);
+    return { date: q.date, time: String(q.hour).padStart(2, '0') + '30' };
+  })();
+  const cKey = `wxu-v1-${nx}-${ny}-${base.date}${base.time}`;
+  const hit: any = await store.get(cKey, { type: 'json' });
+  if (hit) return hit;
+  const url = `${ULTRA_API}?serviceKey=${encodeURIComponent(key)}&pageNo=1&numOfRows=100&dataType=JSON&base_date=${base.date}&base_time=${base.time}&nx=${nx}&ny=${ny}`;
+  const items = itemsOf(await getJsonRetry(url, deadline));
+  if (!items.length) return null;
+  const byTime = new Map<string, any>();
+  for (const it of items) {
+    const kk = `${it.fcstDate}${it.fcstTime}`;
+    if (!byTime.has(kk)) byTime.set(kk, { d: String(it.fcstDate), t: String(it.fcstTime) });
+    const h = byTime.get(kk);
+    const v = it.fcstValue;
+    if (it.category === 'SKY') h.sky = num(v);
+    else if (it.category === 'PTY') h.pty = num(v);
+    else if (it.category === 'T1H') h.tmp = num(v);
+    else if (it.category === 'RN1') h.rn1 = String(v);
+  }
+  const out = { at: Date.now(), base: base.date + base.time, hours: Array.from(byTime.values()).sort((a, b) => (a.d + a.t).localeCompare(b.d + b.t)) };
+  await store.setJSON(cKey, out);
+  return out;
+}
+
 const norm = (s: unknown) => String(s ?? '').replace(/\s+|\(.*?\)/g, '');
 async function mountainObs(name: string, key: string, store: any) {
   let all: any = await store.get('mtwx-v1-all', { type: 'json' });
@@ -268,6 +299,7 @@ export default async (req: Request, _context: Context) => {
     }),
   ];
   jobs.push(nowcast(lat, lng, key, store, deadline).then((n) => { if (n) out.now = n; }).catch(() => { /* 실황이 없어도 예보는 보여준다 */ }));
+  jobs.push(ultra(lat, lng, key, store, deadline).then((u) => { if (u) out.ultra = u; }).catch(() => { /* 없어도 다른 자료로 보여준다 */ }));
   if (mt.length >= 2) {
     jobs.push(mountainObs(mt, key, store).then((m) => { out.mt = m; }).catch((err) => {
       if (err instanceof NeedApply) apply.push(DATASETS.mt); else out.mtError = String(err?.message || err).slice(0, 160);

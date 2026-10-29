@@ -6958,6 +6958,28 @@
   // 아이패드 배경화면처럼 앱 바탕이 지금 시각(일출·일몰 기준)과 날씨에 맞는 하늘로 바뀐다.
   // 날씨는 Open-Meteo(키 없음)에서 받고(좌표는 약 10km 단위로 뭉뚱그려 보냄), 못 받으면 시간대 색만 보여 준다.
   // 켜짐(움직임) → 정지 → 꺼짐 순서로 위쪽 줄의 버튼을 눌러 바꾼다. 앱을 숨기면 움직임은 멈춘다.
+  // 지금 시각의 하늘·비: 초단기실황(관측)은 한 시간쯤 늦으므로, 초단기예보(6시간) → 단기예보의 "지금 시간" 값을 함께 본다
+  function wxNearHour(w) {
+    var kn = new Date(Date.now() + 9 * 3600e3), key = kn.getUTCFullYear() * 1e6 + (kn.getUTCMonth() + 1) * 1e4 + kn.getUTCDate() * 100 + kn.getUTCHours();
+    function pick(list) {
+      var best = null, bk = -1, first = null, fk = 1e12;
+      (list || []).forEach(function (h) {
+        var hk = Number(h.d) * 100 + Math.floor(Number(h.t) / 100);
+        if (hk <= key && hk > bk) { bk = hk; best = h; }
+        if (hk < fk) { fk = hk; first = h; }
+      });
+      return best || first;
+    }
+    var u = pick(w && w.ultra && w.ultra.hours), f = pick(w && w.fcst && w.fcst.hours);
+    return { u: u, f: f, h: (u && u.sky != null) ? u : f };
+  }
+  function wxNowPty(n, near) {   // 비·눈은 놓치는 것보다 먼저 알리는 편이 낫다: 관측·초단기예보·단기예보 중 하나라도 비면 비로
+    var p = Number(n && n.pty) || 0;
+    if (!p && near && near.u && Number(near.u.pty) > 0) p = Number(near.u.pty);
+    if (!p && n && Number(n.rn1) > 0) p = 1;
+    if (!p && near && near.f && Number(near.f.pty) > 0) p = Number(near.f.pty);
+    return p;
+  }
   var sky = (function () {
     var MODE_KEY = 'ts.sky', WX_KEY = 'ts.wx';
     var SEOUL = { lat: 37.5665, lng: 126.978 };
@@ -7530,13 +7552,9 @@
       var kctl = window.AbortController ? new AbortController() : null, ktm = kctl ? setTimeout(function () { kctl.abort(); }, 8000) : 0;   // 기상청이 느려도 하늘 배경은 먼저 그린다
       var kmaP = fetch('/api/weather?lat=' + encodeURIComponent(p.lat) + '&lng=' + encodeURIComponent(p.lng), kctl ? { signal: kctl.signal } : undefined)
         .then(function (r) { return r.ok ? r.json() : null; }).then(function (w) {
-          var n = w && w.now, hs = (w && w.fcst && w.fcst.hours) || [], h0 = hs[0];
-          try {   // 지금 시각에 가장 가까운 예보 시간을 고른다
-            var kn = new Date(Date.now() + 9 * 3600e3), key = kn.getUTCFullYear() * 1e6 + (kn.getUTCMonth() + 1) * 1e4 + kn.getUTCDate() * 100 + kn.getUTCHours();
-            var bd = 1e9; hs.forEach(function (h) { var hk = Number(h.d) * 100 + Math.floor(Number(h.t) / 100), dd = Math.abs(hk - key); if (h.sky != null && dd < bd) { bd = dd; h0 = h; } });
-          } catch (_) {}
+          var n = w && w.now, near = wxNearHour(w), h0 = near.h;
           if (!n || n.tmp == null) return null;
-          var pty = Number(n.pty) || 0, sk = h0 ? Number(h0.sky) : 0;
+          var pty = wxNowPty(n, near), sk = h0 ? Number(h0.sky) : 0;
           if (!pty && !sk) return { tmp: n.tmp };
           return { tmp: n.tmp, pty: pty, sky: sk };
         }).catch(function () { return null; }).then(function (v) { clearTimeout(ktm); return v; });
@@ -8511,14 +8529,14 @@
     if (nowBox) {
       nowBox.hidden = !(n && n.tmp != null);
       if (n && n.tmp != null) {
-        var h0 = f && f.hours && f.hours[0];
-        var ic0 = wxIcon({ pty: n.pty || 0, sky: h0 ? h0.sky : null });
+        var near = wxNearHour(w), h0 = near.h, pty0 = wxNowPty(n, near);
+        var ic0 = wxIcon({ pty: pty0, sky: h0 ? h0.sky : null });
         var nb = String(n.base || '');
-        nowBox.innerHTML = (ic0[0] ? '<span class="ic">' + wxIconHtml({ pty: n.pty || 0, sky: h0 ? h0.sky : null }) + '</span>' : '') +
+        nowBox.innerHTML = (ic0[0] ? '<span class="ic">' + wxIconHtml({ pty: pty0, sky: h0 ? h0.sky : null }) + '</span>' : '') +
           '<span class="big">' + Math.round(n.tmp * 10) / 10 + '°</span>' +
           '<div class="det"><b>지금' + (ic0[1] ? ' · ' + escapeHtml(ic0[1]) : '') + '</b><br>' +
           [n.reh != null ? '습도 ' + Math.round(n.reh) + '%' : '', n.wsd != null ? '바람 ' + n.wsd + 'm/s' + (n.vec != null ? ' (' + wxDir(n.vec) + ')' : '') : '', n.rn1 ? '1시간 강수 ' + n.rn1 + 'mm' : ''].filter(Boolean).join(' · ') +
-          (nb.length >= 12 ? '<br><small class="copy-hint">' + Number(nb.slice(8, 10)) + '시 관측(기상청 초단기실황)</small>' : '') + skyNote(view) + '</div>';
+          (nb.length >= 12 ? '<br><small class="copy-hint">' + Number(nb.slice(8, 10)) + '시 관측(기상청 초단기실황)' + (pty0 && !(Number(n.pty) > 0) ? ' · 비는 기상청 예보 기준' : '') + '</small>' : '') + skyNote(view) + '</div>';
       }
     }
     var srcBox = sheet.querySelector('[data-wxsrc]');
