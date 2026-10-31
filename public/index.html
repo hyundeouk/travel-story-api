@@ -5043,8 +5043,23 @@
       pad.addEventListener('click', function (e) {
         var b = e.target.closest('button'); if (!b) return;
         if (b.hasAttribute('data-me')) {
-          var c = (el.id === 'map' && state.nearPos) || geo.pos;
-          if (c) m.panTo(new K.LatLng(c.lat, c.lng));
+          // 예전에 받은 위치로 옮기지 않고, 누를 때마다 정밀 위치를 새로 받아 점과 지도를 함께 옮긴다
+          var main = el.id === 'map';
+          if (b.__locating) return;
+          b.__locating = true; b.classList.add('busy');
+          showToast('📍 내 위치를 확인하는 중이에요… (몇 초 걸려요)', 7000);
+          locate(true).then(function (pos) {
+            b.__locating = false; b.classList.remove('busy');
+            if (!pos) { showToast('📍 내 위치를 받지 못했어요. 휴대폰 설정에서 위치(정밀 위치)가 켜져 있는지 확인해 주세요.', 5000); return; }
+            var acc = geo.acc;
+            showToast('📍 내 위치를 새로 확인했어요' + (acc ? ' (오차 약 ' + (acc >= 1000 ? (acc / 1000).toFixed(1) + 'km' : acc + 'm') + ')' : '') + (acc && acc > 150 ? ' · 실내면 창가에서 다시 눌러 보세요' : ''), 4000);
+            if (main) {
+              state.nearPos = pos;
+              if (state.view === 'map' && state.mapLayers && state.mapLayers['내 주변']) { state.nearFit = true; renderMap(); return; }
+              if (state.mainMe) { try { state.mainMe.setPosition(new naver.maps.LatLng(pos.lat, pos.lng)); } catch (_) {} }
+            }
+            m.panTo(new K.LatLng(pos.lat, pos.lng));
+          });
           return;
         }
         var d = b.getAttribute('data-p').split(',').map(Number);
@@ -6865,7 +6880,7 @@
   // 한 번 위치를 허용하면 그 위치를 기기에 기억해 두고, 다음에 열 때 브라우저가 다시 물을 상황이면(사파리 '묻기' 설정)
   // 묻지 않고 기억한 위치를 바로 쓴다. 브라우저가 이미 허용 상태이면 조용히 새 위치를 받는다.
   // '내 위치 다시 확인'을 누를 때만 새로 묻는다.
-  var geo = { pos: null, at: 0, err: null, pending: null, saved: false };
+  var geo = { pos: null, at: 0, err: null, pending: null, saved: false, acc: null };
   var GEO_KEY = 'ts.geo';
   function geoSaved() { try { var g = JSON.parse(localStorage.getItem(GEO_KEY) || 'null'); return g && isFinite(g.lat) && isFinite(g.lng) ? g : null; } catch (_) { return null; } }
   function geoSave(p) { try { localStorage.setItem(GEO_KEY, JSON.stringify({ lat: p.lat, lng: p.lng, at: Date.now(), ok: 1 })); } catch (_) {} }
@@ -6879,20 +6894,38 @@
   }
   var geoTried = false; // 이번에 앱을 연 뒤 현재 위치를 받아 봤는지
   function geoFresh(fresh) {   // fresh: 직접 다시 확인을 눌렀을 때는 기억해 둔 위치를 쓰지 않고 새로 받는다
+    // 휴대폰은 "정밀 위치(GPS)"를 켜야 몇십 m 안으로 맞는다. 정밀하게 몇 초 동안 여러 번 받아 가장 정확한 값을 고른다(오차 40m 안이면 바로 끝).
     return new Promise(function (resolve) {
-      navigator.geolocation.getCurrentPosition(
-        function (p) {
-          geo.pos = { lat: p.coords.latitude, lng: p.coords.longitude };
-          geo.at = Date.now(); geo.err = null; geo.saved = false;
-          geoSave(geo.pos);
-          resolve(geo.pos);
-        },
-        function (err) {
+      var done = false, best = null, wid = null, timer = null;
+      function accOf(p) { var a = p && p.coords && p.coords.accuracy; return isFinite(a) ? a : 1e9; }
+      function use(p) {
+        geo.pos = { lat: p.coords.latitude, lng: p.coords.longitude };
+        geo.acc = isFinite(p.coords.accuracy) ? Math.round(p.coords.accuracy) : null;
+        geo.at = Date.now(); geo.err = null; geo.saved = false;
+        geoSave(geo.pos);
+        resolve(geo.pos);
+      }
+      function finish() {
+        if (done) return; done = true;
+        clearTimeout(timer);
+        try { if (wid != null) navigator.geolocation.clearWatch(wid); } catch (_) {}
+        if (best) return use(best);
+        // 정밀 위치를 못 받았으면 보통 방식으로 한 번 더
+        navigator.geolocation.getCurrentPosition(use, function (err) {
           geo.err = err && err.code === 1 ? 'denied' : 'failed';
-          resolve(geo.pos); // 예전에 확인한 위치가 있으면 그것이라도 쓴다
-        },
-        { enableHighAccuracy: false, timeout: 15000, maximumAge: fresh ? 0 : 60000 }
-      );
+          resolve(geo.pos);   // 예전에 확인한 위치가 있으면 그것이라도 쓴다
+        }, { enableHighAccuracy: false, timeout: 10000, maximumAge: fresh ? 0 : 60000 });
+      }
+      try {
+        wid = navigator.geolocation.watchPosition(function (p) {
+          if (!best || accOf(p) < accOf(best)) best = p;
+          if (accOf(best) <= 40) finish();
+        }, function (err) {
+          if (err && err.code === 1) { geo.err = 'denied'; done = true; clearTimeout(timer); try { navigator.geolocation.clearWatch(wid); } catch (_) {} resolve(geo.pos); return; }
+          if (!best) finish();
+        }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+        timer = setTimeout(finish, fresh ? 7000 : 4500);
+      } catch (_) { finish(); }
     });
   }
   // 기억한 위치로 먼저 그린 화면을, 현재 위치를 받으면 다시 그린다
@@ -6902,7 +6935,7 @@
       if (geo.err) showToast('📍 현재 위치를 받지 못해 지난번 위치로 보여 드려요 · 「내 위치 다시 확인」으로 다시 받을 수 있어요', 5000);
       return;
     }
-    if (before && distKm(before.lat, before.lng, now.lat, now.lng) < 0.3) return;
+    if (before && distKm(before.lat, before.lng, now.lat, now.lng) < 0.08) return;
     state.nearPos = now;
     if (state.view === 'map' && state.mapLayers && state.mapLayers['내 주변']) renderMap();
     else if (state.view === 'food') renderFood();
