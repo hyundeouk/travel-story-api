@@ -95,6 +95,11 @@ export function getStore(opt: any) {
       return {};
     },
     async delete(key: string) {
+      // 사진을 지우면 그 사진의 카드용 작은 복사본(<uuid>.t.jpg)도 함께 지운다
+      if (PHOTO_STORES.has(name) && /^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/.test(key)) {
+        const tk = key.replace(/\.[a-z]+$/, '') + '.t.jpg', tdb = dbFor(name, tk);
+        try { await tdb.prepare('DELETE FROM blobs WHERE store=?1 AND key=?2').bind(name, tk).run(); if (tdb !== MAIN) await MAIN.prepare('DELETE FROM blobs WHERE store=?1 AND key=?2').bind(name, tk).run(); } catch {}
+      }
       const db = dbFor(name, key);
       await db.prepare('DELETE FROM blobs WHERE store=?1 AND key=?2').bind(name, key).run();
       if (db !== MAIN) await MAIN.prepare('DELETE FROM blobs WHERE store=?1 AND key=?2').bind(name, key).run();

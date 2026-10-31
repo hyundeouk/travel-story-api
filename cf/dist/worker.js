@@ -1830,6 +1830,14 @@ function getStore(opt) {
       return {};
     },
     async delete(key) {
+      if (PHOTO_STORES.has(name) && /^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/.test(key)) {
+        const tk = key.replace(/\.[a-z]+$/, "") + ".t.jpg", tdb = dbFor(name, tk);
+        try {
+          await tdb.prepare("DELETE FROM blobs WHERE store=?1 AND key=?2").bind(name, tk).run();
+          if (tdb !== MAIN) await MAIN.prepare("DELETE FROM blobs WHERE store=?1 AND key=?2").bind(name, tk).run();
+        } catch {
+        }
+      }
       const db = dbFor(name, key);
       await db.prepare("DELETE FROM blobs WHERE store=?1 AND key=?2").bind(name, key).run();
       if (db !== MAIN) await MAIN.prepare("DELETE FROM blobs WHERE store=?1 AND key=?2").bind(name, key).run();
@@ -3543,6 +3551,8 @@ var TYPE = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" };
 var ID_RE = /^[0-9a-f-]{36}\.(jpg|png|webp)$/;
 var MAX_BYTES = 3 * 1024 * 1024;
 var store6 = () => getStore({ name: "gphotos", consistency: "strong" });
+var MAX_THUMB = 600 * 1024;
+var tkey = (id) => id.replace(/\.[a-z]+$/, "") + ".t.jpg";
 async function sha2562(text3) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text3));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -3556,7 +3566,34 @@ var gphotos_default = async (req, context) => {
     if (!share.tabs.gstory) return jsonResponse({ error: "not found" }, { status: 404 });
   }
   const id = context.params?.id;
+  const url = new URL(req.url);
+  const wantThumb = url.searchParams.get("t") === "1";
   try {
+    if (req.method === "POST" && id && wantThumb) {
+      if (!ID_RE.test(id)) return jsonResponse({ error: "not found" }, { status: 404 });
+      const meta = await store6().getMetadata(id);
+      if (!meta) return jsonResponse({ error: "not found" }, { status: 404 });
+      if (!a.canEdit) {
+        const token = (req.headers.get("x-author") || "").trim();
+        const author = a.guest ? await sha2562("gs|acct|" + a.guest.id) : /^[A-Za-z0-9_-]{24,100}$/.test(token) ? await sha2562("gs|" + token) : "";
+        if (!author || meta.metadata?.author !== author) return jsonResponse({ error: "not yours" }, { status: 403 });
+      }
+      const type = (req.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+      if (type !== "image/jpeg") return jsonResponse({ error: "unsupported image type" }, { status: 415 });
+      const body = await req.arrayBuffer();
+      if (!body.byteLength || body.byteLength > MAX_THUMB) return jsonResponse({ error: "bad thumbnail size" }, { status: 413 });
+      await store6().set(tkey(id), body, { metadata: meta.metadata || {} });
+      return jsonResponse({ ok: true }, { status: 201 });
+    }
+    if (req.method === "GET" && !id && url.searchParams.get("need") != null) {
+      if (!a.canEdit) return jsonResponse({ error: "forbidden" }, { status: 403 });
+      const ids = url.searchParams.get("need").split(",").filter((x) => ID_RE.test(x)).slice(0, 60);
+      const need = [];
+      for (const x of ids) {
+        if (!await store6().getMetadata(tkey(x))) need.push(x);
+      }
+      return jsonResponse({ need }, { headers: { "Cache-Control": "no-store" } });
+    }
     if (req.method === "POST" && !id) {
       const token = (req.headers.get("x-author") || "").trim();
       if (!a.canEdit && !a.guest && !/^[A-Za-z0-9_-]{24,100}$/.test(token)) return jsonResponse({ error: "author key required" }, { status: 400 });
@@ -3573,6 +3610,13 @@ var gphotos_default = async (req, context) => {
     }
     if (req.method === "GET" && id) {
       if (!ID_RE.test(id)) return jsonResponse({ error: "not found" }, { status: 404 });
+      if (wantThumb) {
+        const th = await store6().get(tkey(id), { type: "arrayBuffer" });
+        if (th) return new Response(th, { headers: { "content-type": "image/jpeg", "cache-control": "private, max-age=31536000, immutable", "x-thumb": "yes" } });
+        const orig = await store6().get(id, { type: "arrayBuffer" });
+        if (!orig) return jsonResponse({ error: "not found" }, { status: 404 });
+        return new Response(orig, { headers: { "content-type": TYPE[id.split(".").pop()], "cache-control": "private, max-age=600", "x-thumb": "no" } });
+      }
       const data = await store6().get(id, { type: "arrayBuffer" });
       if (!data) return jsonResponse({ error: "not found" }, { status: 404 });
       return new Response(data, { headers: { "content-type": TYPE[id.split(".").pop()], "cache-control": "private, max-age=31536000, immutable" } });
@@ -4670,12 +4714,35 @@ var TYPE2 = { jpg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "ima
 var ID_RE2 = /^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/;
 var MAX_BYTES2 = 5 * 1024 * 1024;
 var photos3 = () => getStore({ name: "photos", consistency: "strong" });
+var MAX_THUMB2 = 600 * 1024;
+var tkey2 = (id) => id.replace(/\.[a-z]+$/, "") + ".t.jpg";
 var photos_default = async (req, context) => {
   if (req.method === "OPTIONS") return corsPreflightResponse();
   const denied = await guard(req);
   if (denied) return denied;
   const id = context.params?.id;
+  const url = new URL(req.url);
+  const wantThumb = url.searchParams.get("t") === "1";
   try {
+    if (req.method === "POST" && id && wantThumb) {
+      if (!ID_RE2.test(id)) return jsonResponse({ error: "not found" }, { status: 404 });
+      if (!await photos3().getMetadata(id)) return jsonResponse({ error: "not found" }, { status: 404 });
+      const type = (req.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+      if (type !== "image/jpeg") return jsonResponse({ error: "unsupported image type" }, { status: 415 });
+      const body = await req.arrayBuffer();
+      if (!body.byteLength || body.byteLength > MAX_THUMB2) return jsonResponse({ error: "bad thumbnail size" }, { status: 413 });
+      await photos3().set(tkey2(id), body);
+      return jsonResponse({ ok: true }, { status: 201 });
+    }
+    if (req.method === "GET" && !id && url.searchParams.get("need") != null) {
+      if (!(await accessOf(req)).canEdit) return jsonResponse({ error: "forbidden" }, { status: 403 });
+      const ids = url.searchParams.get("need").split(",").filter((x) => ID_RE2.test(x)).slice(0, 60);
+      const need = [];
+      for (const x of ids) {
+        if (!await photos3().getMetadata(tkey2(x))) need.push(x);
+      }
+      return jsonResponse({ need }, { headers: { "Cache-Control": "no-store" } });
+    }
     if (req.method === "POST" && !id) {
       const type = (req.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
       const ext = EXT2[type];
@@ -4696,6 +4763,13 @@ var photos_default = async (req, context) => {
         if (owner && (!share.tabs.feed || share.hiddenStories.includes(String(owner.id)))) {
           return jsonResponse({ error: "not found" }, { status: 404 });
         }
+      }
+      if (wantThumb) {
+        const th = await photos3().get(tkey2(id), { type: "arrayBuffer" });
+        if (th) return new Response(th, { headers: { "content-type": "image/jpeg", "cache-control": "private, max-age=31536000, immutable", "x-thumb": "yes" } });
+        const orig = await photos3().get(id, { type: "arrayBuffer" });
+        if (!orig) return jsonResponse({ error: "not found" }, { status: 404 });
+        return new Response(orig, { headers: { "content-type": TYPE2[id.split(".").pop()], "cache-control": "private, max-age=600", "x-thumb": "no" } });
       }
       const data = await photos3().get(id, { type: "arrayBuffer" });
       if (!data) return jsonResponse({ error: "not found" }, { status: 404 });

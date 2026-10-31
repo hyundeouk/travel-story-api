@@ -1825,7 +1825,7 @@
       var card = el(
         '<div class="place-card">' +
           '<div class="card-thumb">' +
-            (photos.length ? '<img alt="" loading="lazy" src="' + photoUrl(photos[0]) + '">' : '<div class="card-ph">' + categoryEmoji(s.category) + '</div>') +
+            (photos.length ? '<img alt="" loading="lazy" src="' + thumbSrc(photoUrl(photos[0])) + '">' : '<div class="card-ph">' + categoryEmoji(s.category) + '</div>') +
             (region !== '기타' ? '<span class="region-badge">' + escapeHtml(region) + '</span>' : '') +
             (photos.length > 1 ? '<span class="visit-badge">사진 ' + photos.length + '장</span>' : '') +
           '</div>' +
@@ -1882,27 +1882,35 @@
   }
 
   // 휴대폰 사진은 용량이 커서 올리기 전에 긴 변 1600px JPEG로 줄인다.
-  function shrinkImage(file) {
+  function shrinkImage(file, maxSide, q) {
     return new Promise(function (resolve, reject) {
       var url = URL.createObjectURL(file);
       var img = new Image();
       img.onload = function () {
-        var max = 1600;
+        var max = maxSide || 1600;
         var scale = Math.min(1, max / Math.max(img.width, img.height));
         var canvas = document.createElement('canvas');
         canvas.width = Math.round(img.width * scale);
         canvas.height = Math.round(img.height * scale);
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(url);
-        canvas.toBlob(function (blob) { blob ? resolve(blob) : reject(new Error('resize failed')); }, 'image/jpeg', 0.85);
+        canvas.toBlob(function (blob) { blob ? resolve(blob) : reject(new Error('resize failed')); }, 'image/jpeg', q || 0.85);
       };
       img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
       img.src = url;
     });
   }
+  // 카드 목록용 작은 복사본(긴 변 800px). 올릴 때 함께 만들어 두고, 목록 카드에서만 쓴다(상세·크게 보기는 원본).
+  function thumbSrc(url) { return /^\/api\/(photos|gphotos)\/[^?]+$/.test(url || '') ? url + '?t=1' : url; }
+  function sendThumb(kind, id, source) {
+    return Promise.resolve(shrinkImage(source, 800, 0.78)).then(function (b) {
+      return (kind === 'gphotos' ? gapi : api)(kind + '/' + encodeURIComponent(id) + '?t=1', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: b });
+    }).then(function () { return true; }, function () { return false; });   // 못 만들어도 원본이 대신 나오므로 올리기는 계속한다
+  }
   async function uploadPhoto(file) {
     var blob = await shrinkImage(file);
     var up = await api('photos', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+    await sendThumb('photos', up.id, file);
     return up.id;
   }
 
@@ -3630,7 +3638,7 @@
       };
       img.onerror = function () { img.remove(); resolve(false); };
       setTimeout(function () { if (!img.naturalWidth) { img.remove(); resolve(false); } }, 12000);
-      img.src = url;
+      img.src = thumbSrc(url);   // 내 사진은 카드용 작은 복사본으로 (없으면 원본이 대신 나온다)
       thumb.insertBefore(img, thumb.firstChild);
     });
   }
@@ -7763,6 +7771,7 @@
           if (pending) {
             var blob = await shrinkImage(pending);
             var up = await api('photos', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+            await sendThumb('photos', up.id, pending);
             await put({ key: pkey, photoId: up.id });
           } else {
             // 주소가 실제로 그림으로 열리는지 먼저 확인한다.
@@ -7861,6 +7870,7 @@
         try {
           var blob = await shrinkImage(files[i]);
           var up = await api('photos', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+          await sendThumb('photos', up.id, files[i]);
           await ppSave({ key: view.key, action: 'add', photoId: up.id });
           done++;
         } catch (err) { console.warn('[photos] add failed', err); bad.push(files[i].name || ('사진 ' + (i + 1))); }
@@ -9631,7 +9641,7 @@
       var card = el(
         '<div class="place-card gs-card">' +
           '<div class="card-thumb">' +
-            (ph.length ? '<img alt="" loading="lazy" src="' + gPhotoUrl(ph[0]) + '">' : '<div class="card-ph">' + (g.golf ? '⛳' : g.hike ? '⛰️' : '✍️') + '</div>') +
+            (ph.length ? '<img alt="" loading="lazy" src="' + thumbSrc(gPhotoUrl(ph[0])) + '">' : '<div class="card-ph">' + (g.golf ? '⛳' : g.hike ? '⛰️' : '✍️') + '</div>') +
             (g.status !== 'ok' ? '<span class="region-badge gs-st ' + escapeHtml(g.status) + '">' + escapeHtml(G_STATUS[g.status] || g.status) + '</span>' : g.region ? '<span class="region-badge">' + escapeHtml(g.region) + '</span>' : '') +
             (ph.length > 1 ? '<span class="visit-badge">사진 ' + ph.length + '장</span>' : '') +
           '</div>' +
@@ -9802,6 +9812,7 @@
           btn.textContent = '사진 올리는 중... (' + (i + 1) + '/' + photos.length + ')';
           var blob = await shrinkImage(p.file);
           var up = await gapi('gphotos', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+          await sendThumb('gphotos', up.id, p.file);
           p.id = up.id; ids.push(up.id);
         }
         btn.textContent = '저장하는 중...';
@@ -10506,6 +10517,7 @@
           btn.textContent = '사진 올리는 중... (' + (i + 1) + '/' + photos.length + ')';
           var blob = await shrinkImage(p.file);
           var up = await gapi('gphotos', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+          await sendThumb('gphotos', up.id, p.file);
           p.id = up.id; ids.push(up.id);
         }
         btn.textContent = '저장하는 중...';
@@ -10780,6 +10792,76 @@
       (state.pickPending ? ' <span class="err-badge pk-badge" title="확인을 기다리는 게스트 맛집">🍜 ' + state.pickPending + '</span>' : '') +
       (state.fixNew ? ' <span class="err-badge pk-badge" title="게스트가 알려 준 정보 오류">📝 ' + state.fixNew + '</span>' : '');
   }
+  // ----- 공유·관리 → 🖼 사진 빠르게 불러오기: 이미 올린 사진의 카드용 작은 복사본(800px)을 한 번에 만든다. 원본은 그대로 둔다.
+  function openThumbAdmin(host) {
+    var box = el('<div class="thumb-admin">' +
+      '<h3>🖼 사진 빠르게 불러오기</h3>' +
+      '<div class="copy-hint">목록 카드가 큰 원본 대신 <b>작은 복사본(긴 변 800px)</b>을 받아 더 빨리 뜨게 해요. 상세 화면·크게 보기는 지금과 똑같은 원본이에요. 원본은 바뀌지 않고, 중간에 멈춰도 이어서 할 수 있어요. 사진이 많으면 몇 분 걸리니 <b>와이파이에서 PC로</b> 하는 걸 권해요.</div>' +
+      '<div class="status-line" data-ts>아래 단추로 먼저 확인해 보세요.</div>' +
+      '<div class="thumb-bar" style="height:8px;background:rgba(128,128,128,.25);border-radius:4px;overflow:hidden;margin:6px 0"><i data-tbar style="display:block;height:100%;width:0;background:#2a9d6a"></i></div>' +
+      '<div><button type="button" class="link-btn" style="margin:0 8px 0 0" data-tcheck>사진 확인하기</button>' +
+      '<button type="button" class="link-btn" style="margin:0 8px 0 0" data-tgo hidden>작은 복사본 만들기</button>' +
+      '<button type="button" class="link-btn" style="margin:0" data-tstop hidden>멈추기</button></div>' +
+      '</div>');
+    host.appendChild(box);
+    var st = box.querySelector('[data-ts]'), bar = box.querySelector('[data-tbar]');
+    var bCheck = box.querySelector('[data-tcheck]'), bGo = box.querySelector('[data-tgo]'), bStop = box.querySelector('[data-tstop]');
+    var todo = [], stop = false, busy = false;
+    function say(t, err) { st.className = 'status-line' + (err ? ' err' : ''); st.textContent = t; }
+    function addIds(set, arr) { (arr || []).forEach(function (x) { if (typeof x === 'string' && /^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/.test(x)) set[x] = 1; }); }
+    async function needOf(kind, ids) {
+      var out = [];
+      for (var i = 0; i < ids.length; i += 50) {
+        var r = await (kind === 'gphotos' ? gapi : api)(kind + '?need=' + ids.slice(i, i + 50).map(encodeURIComponent).join(','));
+        out = out.concat(r.need || []);
+        say('확인하는 중… ' + Math.min(i + 50, ids.length) + ' / ' + ids.length);
+      }
+      return out.map(function (id) { return { kind: kind, id: id }; });
+    }
+    bCheck.addEventListener('click', async function () {
+      if (busy) return; busy = true; bCheck.disabled = true; bGo.hidden = true; bar.style.width = '0';
+      try {
+        say('올린 사진 목록을 모으는 중…');
+        var rs = await Promise.all([api('stories'), api('customimages'), api('placephotos'), gapi('gstories'), gapi('picks')]);
+        var P = {}, G = {};
+        (rs[0].items || []).forEach(function (x) { addIds(P, storyPhotos(x)); });
+        Object.keys(rs[1].items || {}).forEach(function (k) { var c = rs[1].items[k]; if (c && c.photoId) addIds(P, [c.photoId]); });
+        Object.keys(rs[2].items || {}).forEach(function (k) { ((rs[2].items[k] || {}).add || []).forEach(function (a) { if (a && a.photoId) addIds(P, [a.photoId]); }); });
+        (rs[3].items || []).forEach(function (x) { addIds(G, x.photoIds); });
+        (rs[4].items || []).forEach(function (x) { addIds(G, x.photoIds); });
+        var pids = Object.keys(P), gids = Object.keys(G);
+        todo = (await needOf('photos', pids)).concat(await needOf('gphotos', gids));
+        if (!todo.length) { say('✅ 올린 사진 ' + (pids.length + gids.length) + '장 모두 작은 복사본이 있어요. 할 일이 없어요.'); }
+        else { say('올린 사진 ' + (pids.length + gids.length) + '장 중 ' + todo.length + '장에 작은 복사본이 없어요. 아래 단추로 만들 수 있어요.'); bGo.hidden = false; bGo.textContent = '작은 복사본 만들기 (' + todo.length + '장)'; }
+      } catch (err) { say('확인하지 못했어요. 잠시 뒤 다시 눌러 주세요.', true); }
+      busy = false; bCheck.disabled = false;
+    });
+    bStop.addEventListener('click', function () { stop = true; bStop.disabled = true; });
+    bGo.addEventListener('click', async function () {
+      if (busy || !todo.length) return; busy = true; stop = false; bGo.hidden = true; bCheck.disabled = true; bStop.hidden = false; bStop.disabled = false;
+      var total = todo.length, ok = 0, bad = 0, i = 0;
+      async function one(t) {
+        var res = await fetch('/api/' + t.kind + '/' + encodeURIComponent(t.id), { headers: t.kind === 'gphotos' ? { 'X-Author': authorKey() } : {} });
+        if (!res.ok) throw new Error('get ' + res.status);
+        var blob = await res.blob();
+        var f = await shrinkImage(blob, 800, 0.78);
+        await (t.kind === 'gphotos' ? gapi : api)(t.kind + '/' + encodeURIComponent(t.id) + '?t=1', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: f });
+      }
+      async function worker() {
+        while (!stop && i < total && box.isConnected) {
+          var t = todo[i++];
+          try { await one(t); ok++; } catch (e) { bad++; }
+          bar.style.width = Math.round((ok + bad) / total * 100) + '%';
+          say('만드는 중… ' + (ok + bad) + ' / ' + total + (bad ? ' (실패 ' + bad + ')' : ''));
+        }
+      }
+      await Promise.all([worker(), worker(), worker()]);   // 세 장씩 동시에
+      busy = false; bStop.hidden = true; bCheck.disabled = false;
+      var left = total - ok - bad;
+      say((stop || left > 0 ? '⏸ 멈췄어요. ' : '✅ 끝났어요. ') + ok + '장 만들었어요' + (bad ? ' · 실패 ' + bad + '장' : '') + (left > 0 ? ' · 남은 ' + left + '장은 「사진 확인하기」 후 이어서 만들 수 있어요' : '') + '.', bad > 0 && !ok);
+      if (!stop && left <= 0 && !bad) bar.style.width = '100%';
+    });
+  }
   // ----- 공유·관리 → 📝 정보 오류·지운 항목
   function openFixAdmin(host) {
     var box = el('<div class="fix-admin">' +
@@ -11052,6 +11134,7 @@
             '<button type="button" data-anav="fixes">📝 정보 오류·지운 항목' + (state.fixNew ? ' <span class="err-badge">' + state.fixNew + '</span>' : '') + '</button>' +
             '<button type="button" data-anav="share">🔒 공개 범위</button>' +
             '<button type="button" data-anav="prefs">⚙️ 내 메뉴 설정</button>' +
+            '<button type="button" data-anav="thumbs">🖼 사진 빠르게 불러오기</button>' +
             '<div class="admin-note admin-nav-note"><b>아이패드·휴대폰에서 고치려면</b> — 그 기기에서 이 사이트를 열고 <b>운영자 로그인</b>에 편집 암호를 넣으면 돼요.</div>' +
           '</nav>' +
           '<div class="admin-pane" data-apane></div>' +
@@ -11063,6 +11146,7 @@
         if (k === 'share') openShareSettings(pane);
         else if (k === 'prefs') openPrefs(false, pane);
         else if (k === 'fixes') openFixAdmin(pane);
+        else if (k === 'thumbs') openThumbAdmin(pane);
         else openGuestAdmin(pane);
         pane.scrollTop = 0;
       }
