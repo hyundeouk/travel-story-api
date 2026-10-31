@@ -8429,7 +8429,27 @@
     if (seq !== wxTab.seq) return;
     status.hidden = true;
     renderWeather(box, view, w);
+    wxTab.last = { box: box, view: view, w: w, at: Date.now(), hk: wxHourKey() };
   }
+  // 화면을 켜 둔 채 시간이 지나면: 시간이 바뀔 때마다 "지금 시간"이 맨 왼쪽에 오도록 다시 그리고(받아 둔 자료로 바로),
+  // 자료가 15분 넘게 묵었으면 새로 받아 온다. 다른 탭이거나 화면이 가려져 있으면 하지 않고, 다시 보일 때 한 번에 맞춘다.
+  function wxHourKey() { var d = new Date(Date.now() + 9 * 3600e3); return d.getUTCFullYear() * 1e6 + (d.getUTCMonth() + 1) * 1e4 + d.getUTCDate() * 100 + d.getUTCHours(); }
+  function wxKeepFresh() {
+    var L = wxTab.last;
+    if (!L || state.view !== 'weather' || document.visibilityState !== 'visible' || !L.box.isConnected || wxTab.busy) return;
+    var stale = Date.now() - L.at > 15 * 60e3, moved = L.hk !== wxHourKey();
+    if (!stale && !moved) return;
+    wxTab.busy = true;
+    Promise.resolve(stale ? loadWeather(L.view) : L.w).then(function (w) {
+      if (state.view !== 'weather' || wxTab.last !== L || !L.box.isConnected) return;
+      var hb = L.box.querySelector('[data-wxhours]'), keep = hb ? hb.scrollLeft : 0;
+      renderWeather(L.box, L.view, w);
+      if (hb) hb.scrollLeft = moved ? 0 : keep;
+      wxTab.last = { box: L.box, view: L.view, w: w, at: stale ? Date.now() : L.at, hk: wxHourKey() };
+    }).catch(function () {}).then(function () { wxTab.busy = false; });
+  }
+  setInterval(wxKeepFresh, 60 * 1000);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') setTimeout(wxKeepFresh, 300); });
   $('wx-refresh').addEventListener('click', function () { wxTab.picked = null; $('wx-q').value = ''; $('wx-results').hidden = true; renderWeatherTab(true); });
   // 장소 찾기: 카카오 지도 자료(주소·장소 이름) → 없으면 관광공사 자료에서 이름으로
   function wxFind(q) {
