@@ -957,6 +957,8 @@
   .danger-btn:disabled { opacity: 0.6; cursor: default; }
   .copy-hint { font-size: 0.75rem; color: var(--ink-dim); margin-top: 4px; }
   .gs-priv { display: none; } body.viewer .gs-priv { display: block; }
+  .kb-close { position: fixed; z-index: 99999; display: flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.28); background: rgba(20, 24, 22, 0.92); color: #fff; font: inherit; font-size: 14px; font-weight: 700; box-shadow: 0 4px 14px rgba(0,0,0,0.35); -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .kb-close[hidden] { display: none; }
 
   [hidden] { display: none !important; }
 
@@ -1475,6 +1477,60 @@
       reveal(t);
     });
     document.addEventListener('focusout', function () { setTimeout(function () { if (!focused()) { if (!vv || Math.round(window.innerHeight - vv.height) < 80) document.body.classList.remove('kb-open'); } }, 200); });
+  })();
+  // ===== 휴대폰·아이패드: 자판(가상 키보드)을 쉽게 내리기 =====
+  // 물리 키보드가 없으면 입력칸을 누른 뒤 자판이 안 내려가 화면을 가린다. 세 가지로 내릴 수 있게 한다:
+  //   ① 자판 바로 위에 뜨는 「⌨️ 키보드 닫기」 단추  ② 입력칸이 아닌 곳을 가볍게 누르기  ③ 한 줄 입력칸에서 줄바꿈(완료) 키
+  (function () {
+    if (!window.matchMedia || !matchMedia('(pointer: coarse)').matches) return;
+    var vv = window.visualViewport;
+    var btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'kb-close'; btn.hidden = true; btn.textContent = '⌨️ 키보드 닫기';
+    btn.setAttribute('aria-label', '키보드 닫기');
+    document.body.appendChild(btn);
+    var NOT_TEXT = /^(checkbox|radio|button|submit|reset|range|file|color|image|hidden)$/i;
+    function isText(n) {
+      if (!n || n === document.body) return false;
+      if (n.tagName === 'TEXTAREA') return !n.readOnly && !n.disabled;
+      if (n.tagName === 'INPUT') return !NOT_TEXT.test(n.type || 'text') && !n.readOnly && !n.disabled;
+      return !!n.isContentEditable;
+    }
+    function drop() { var a = document.activeElement; if (isText(a)) a.blur(); paint(); }
+    function paint() {
+      var a = document.activeElement;
+      if (!isText(a)) { btn.hidden = true; return; }
+      btn.hidden = false;
+      var h = btn.offsetHeight || 38, w = btn.offsetWidth || 130;
+      var bottom = vv ? vv.offsetTop + vv.height : window.innerHeight, right = vv ? vv.offsetLeft + vv.width : window.innerWidth;
+      btn.style.top = Math.max(8, Math.round(bottom - h - 8)) + 'px';
+      btn.style.left = Math.max(8, Math.round(right - w - 10)) + 'px';
+    }
+    btn.addEventListener('pointerdown', function (e) { e.preventDefault(); });   // 누르는 순간 입력칸이 먼저 풀리지 않게
+    btn.addEventListener('click', function (e) { e.preventDefault(); drop(); });
+    document.addEventListener('focusin', function () { setTimeout(paint, 0); setTimeout(paint, 350); });
+    document.addEventListener('focusout', function () { setTimeout(paint, 60); });
+    if (vv) { vv.addEventListener('resize', paint); vv.addEventListener('scroll', paint); }
+    window.addEventListener('orientationchange', function () { setTimeout(paint, 400); });
+    // ② 입력칸이 아닌 곳을 가볍게 누르면(밀거나 끌지 않고) 자판을 내린다. 누른 곳의 동작이 먼저 끝나도록 조금 늦춘다.
+    var t0 = null;
+    document.addEventListener('touchstart', function (e) {
+      var t = e.touches && e.touches[0];
+      t0 = t && e.touches.length === 1 ? { x: t.clientX, y: t.clientY, el: e.target } : null;
+    }, { passive: true });
+    document.addEventListener('touchend', function (e) {
+      var s = t0; t0 = null;
+      if (!s || !isText(document.activeElement)) return;
+      var c = e.changedTouches && e.changedTouches[0];
+      if (!c || Math.abs(c.clientX - s.x) > 10 || Math.abs(c.clientY - s.y) > 10) return;   // 스크롤·끌기는 제외
+      if (s.el && s.el.closest && s.el.closest('input, textarea, select, label, [contenteditable], .kb-close')) return;
+      setTimeout(function () { if (isText(document.activeElement)) drop(); }, 140);
+    }, { passive: true });
+    // ③ 한 줄 입력칸에서 줄바꿈(이동·완료) 키를 누르면 자판을 내린다 (검색·로그인 등은 입력이 처리된 뒤)
+    document.addEventListener('keydown', function (e) {
+      var a = e.target;
+      if (e.key !== 'Enter' || e.isComposing || !a || a.tagName !== 'INPUT' || !isText(a)) return;
+      setTimeout(function () { if (document.activeElement === a) drop(); }, 60);
+    });
   })();
   // ===== 게스트 사용 기록 · 오류 알림 =====
   // 게스트 기기에서 어떤 기능을 썼는지(횟수)와 오류를 모아 운영자에게 보낸다. 운영자 기기는 보내지 않는다.
